@@ -31,7 +31,6 @@ pub struct BittrexStreamingApi {
     api_key: String,
     api_secret: String,
     customer_id: String,
-    currency_pair: String,
     pub recipients: Vec<Recipient<LiveEvent>>,
     channels: Vec<Channel>,
     agg: LiveAggregatedOrderBook,
@@ -48,28 +47,30 @@ impl ExchangeBot for BittrexBot {
 }
 
 impl BittrexStreamingApi {
-    pub async fn new_bot<C: Credentials>(creds: C, currency_pair: String, channels: Vec<Channel>, recipients: Vec<Recipient<LiveEvent>>) -> Result<BittrexBot> {
+    pub async fn new_bot<C: Credentials>(creds: C, currency_pair: &'static Pair, channels: Vec<Channel>, recipients: Vec<Recipient<LiveEvent>>) -> Result<BittrexBot> {
+        let pair : &'static str = *super::utils::get_pair_string(&currency_pair).expect(format!("Unable to find matching pair for {:?} for Bittrex", currency_pair).as_str());
         let hub = "c2";
         let api = Box::new(BittrexStreamingApi {
             api_key: creds.get("api_key").unwrap_or_default(),
             api_secret: creds.get("api_secret").unwrap_or_default(),
             customer_id: creds.get("customer_id").unwrap_or_default(),
-            currency_pair,
             recipients,
             channels,
             agg: LiveAggregatedOrderBook {
                 depth: 5,
-                pair: Pair::BTC_USD,
+                pair: *currency_pair,
                 asks_by_price: BTreeMap::new(),
                 bids_by_price: BTreeMap::new(),
+                last_asks: vec![],
+                last_bids: vec![],
             },
         });
         let client = HubClient::new(hub, "https://socket.bittrex.com/signalr/", 100, api).await;
         match client {
             Ok(addr) => {
 //                addr.do_send(HubQuery::new(hub.to_string(), "SubscribeToSummaryDeltas".to_string(), "".to_string(), "0".to_string()));
-                addr.do_send(HubQuery::new(hub.to_string(), "QueryExchangeState".to_string(), vec!["USDT-BTC"], "QE2".to_string()));
-                addr.do_send(HubQuery::new(hub.to_string(), "SubscribeToExchangeDeltas".to_string(), vec!["USDT-BTC"], "1".to_string()));
+                addr.do_send(HubQuery::new(hub.to_string(), "QueryExchangeState".to_string(), vec![pair], "QE2".to_string()));
+                addr.do_send(HubQuery::new(hub.to_string(), "SubscribeToExchangeDeltas".to_string(), vec![pair], "1".to_string()));
                 return Ok(BittrexBot { addr });
             }
             Err(e) => {
@@ -101,6 +102,8 @@ impl BittrexStreamingApi {
     }
 }
 
+const DEFAULT_BOOK_DEPTH : i8 = 5;
+
 impl HubClientHandler for BittrexStreamingApi {
     fn connected(&self) {}
 
@@ -126,8 +129,15 @@ impl HubClientHandler for BittrexStreamingApi {
                         self.agg.bids_by_price.entry(kp.0.clone()).or_insert(kp);
                     }
                 };
-                let latest_order_book: Orderbook = self.agg.order_book(5);
-                Ok(LiveEvent::LiveOrderbook(latest_order_book.clone()))
+                let mut latest_order_book: Orderbook = self.agg.order_book(DEFAULT_BOOK_DEPTH);
+                if latest_order_book.asks == self.agg.last_asks && latest_order_book.bids == self.agg.last_bids {
+                    debug!("Order book top {} unchanged, not flushing", DEFAULT_BOOK_DEPTH);
+                    Err(())
+                } else {
+                    self.agg.last_asks = latest_order_book.asks.clone();
+                    self.agg.last_bids = latest_order_book.bids.clone();
+                    Ok(LiveEvent::LiveOrderbook(latest_order_book))
+                }
             }
             "uS" => {
                 BittrexStreamingApi::deflate_array::<SummaryDeltaResponse>(message);
@@ -143,7 +153,7 @@ impl HubClientHandler for BittrexStreamingApi {
                     let kp = (BigDecimal::from(op.R), BigDecimal::from(op.Q));
                     self.agg.bids_by_price.entry(kp.0.clone()).or_insert(kp);
                 };
-                let latest_order_book: Orderbook = self.agg.order_book(5);
+                let latest_order_book: Orderbook = self.agg.order_book(DEFAULT_BOOK_DEPTH);
                 Ok(LiveEvent::LiveOrderbook(latest_order_book.clone()))
             }
             _ => {

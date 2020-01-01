@@ -70,7 +70,9 @@ pub struct LiveAggregatedOrderBook {
     pub depth: usize,
     pub pair: Pair,
     pub asks_by_price: BTreeMap<Price, (Price, Volume)>,
-    pub bids_by_price: BTreeMap<Price, (Price, Volume)>
+    pub bids_by_price: BTreeMap<Price, (Price, Volume)>,
+    pub last_asks: Vec<(Price, Volume)>,
+    pub last_bids: Vec<(Price, Volume)>,
 }
 
 impl LiveAggregatedOrderBook {

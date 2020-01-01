@@ -263,6 +263,14 @@ lazy_static! {
         m.insert(XMR_ETH, "ETH-XMR");
         m.insert(XRP_ETH, "ETH-XRP");
         m.insert(ZEC_ETH, "ETH-ZEC");
+        m.insert(BTC_USD, "USD-BTC");
+        m.insert(DASH_USD, "USD-DASH");
+        m.insert(ETC_USD, "USD-ETC");
+        m.insert(ETH_USD, "USD-ETH");
+        m.insert(LTC_USD, "USD-LTC");
+        m.insert(XMR_USD, "USD-XMR");
+        m.insert(XRP_USD, "USD-XRP");
+        m.insert(ZEC_USD, "USD-ZEC");
         m.insert(BCC_USDT, "USDT-BCC");
         m.insert(BTC_USDT, "USDT-BTC");
         m.insert(DASH_USDT, "USDT-DASH");

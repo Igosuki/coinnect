@@ -16,7 +16,7 @@ use crate::bitstamp::{BitstampApi, BitstampCreds};
 use crate::bitstamp::streaming_api::BitstampStreamingApi;
 use crate::exchange_bot::{DefaultWsActor, ExchangeBot};
 use actix::{Addr, Recipient, Actor, ActorContext};
-use crate::types::{ LiveEvent, Channel };
+use crate::types::{LiveEvent, Channel, Pair};
 
 pub trait Credentials {
     /// Get an element from the credentials.
@@ -45,7 +45,7 @@ impl Coinnect {
     pub async fn new_stream<C: Credentials>(exchange: Exchange, creds: C, r: Vec<Recipient<LiveEvent>>) -> Result<Box<ExchangeBot>> {
         match exchange {
             Exchange::Bitstamp => Ok(Box::new(BitstampStreamingApi::new_bot(creds, String::from("btcusd"), vec![Channel::LiveFullOrderBook], r).await?)),
-            Exchange::Bittrex => Ok(Box::new(BittrexStreamingApi::new_bot(creds, String::from("btcusd"), vec![Channel::LiveFullOrderBook], r).await?)),
+            Exchange::Bittrex => Ok(Box::new(BittrexStreamingApi::new_bot(creds, &Pair::BTC_USD, vec![Channel::LiveFullOrderBook], r).await?)),
             _ => unimplemented!()
         }
     }
