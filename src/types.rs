@@ -75,8 +75,8 @@ pub struct LiveAggregatedOrderBook {
 
 impl LiveAggregatedOrderBook {
     pub fn order_book(&self, depth: i8) -> Orderbook {
-        let asks : Vec<(Price, Volume)> = self.asks_by_price.iter().rev().map(|(k, v)| v.clone()).take(self.depth).collect();
-        let bids: Vec<(Price, Volume)> = self.bids_by_price.iter().rev().map(|(k, v)| v.clone()).take(self.depth).collect();
+        let asks : Vec<(Price, Volume)> = self.asks_by_price.iter().map(|(k, v)| v.clone()).take(self.depth).rev().collect();
+        let bids: Vec<(Price, Volume)> = self.bids_by_price.iter().rev().map(|(k, v)| v.clone()).take(self.depth).rev().collect();
         Orderbook {
             timestamp: Utc::now().timestamp_millis(),
             pair: self.pair,
