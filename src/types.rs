@@ -11,6 +11,7 @@ pub type Volume = BigDecimal;
 pub type Balances = HashMap<Currency, Amount>;
 use chrono::prelude::*;
 use crate::exchange::Exchange;
+use derive_more::Display;
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub enum Channel {
@@ -525,7 +526,7 @@ pub enum Currency {
 ///
 /// Note 2 : 1ST and 2GIVE have been renammed "_1ST" and "_2GIVE" since variables name cannot start
 /// with a number.
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Deserialize, Serialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Deserialize, Serialize, Display)]
 #[allow(non_camel_case_types)]
 pub enum Pair {
     _1ST_BTC,
