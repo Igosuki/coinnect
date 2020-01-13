@@ -11,12 +11,13 @@ use crate::bittrex::{BittrexApi, BittrexCreds};
 use crate::bittrex::streaming_api::BittrexStreamingApi;
 use crate::gdax::{GdaxApi, GdaxCreds};
 use crate::error::{Result};
-use crate::exchange::{Exchange, ExchangeApi};
+use crate::exchange::{Exchange, ExchangeApi, ExchangeSettings};
 use crate::bitstamp::{BitstampApi, BitstampCreds};
 use crate::bitstamp::streaming_api::BitstampStreamingApi;
-use crate::exchange_bot::{DefaultWsActor, ExchangeBot};
-use actix::{Addr, Recipient, Actor, ActorContext};
-use crate::types::{LiveEvent, Channel, Pair};
+use crate::exchange_bot::{ExchangeBot};
+use actix::{Recipient};
+use crate::types::{Channel, Pair, LiveEventEnveloppe};
+use std::collections::HashMap;
 
 pub trait Credentials {
     /// Get an element from the credentials.
@@ -32,7 +33,7 @@ pub struct Coinnect;
 
 impl Coinnect {
     /// Create a new CoinnectApi by providing an API key & API secret
-    pub fn new<C: Credentials>(exchange: Exchange, creds: C) -> Result<Box<ExchangeApi>> {
+    pub fn new<C: Credentials>(exchange: Exchange, creds: C) -> Result<Box<dyn ExchangeApi>> {
         match exchange {
             Exchange::Bitstamp => Ok(Box::new(BitstampApi::new(creds)?)),
             Exchange::Kraken => Ok(Box::new(KrakenApi::new(creds)?)),
@@ -42,10 +43,17 @@ impl Coinnect {
         }
     }
 
-    pub async fn new_stream<C: Credentials>(exchange: Exchange, creds: C, r: Vec<Recipient<LiveEvent>>) -> Result<Box<ExchangeBot>> {
+    pub async fn new_stream<C: Credentials>(exchange: Exchange, creds: C, s: ExchangeSettings, r: Vec<Recipient<LiveEventEnveloppe>>) -> Result<Box<dyn ExchangeBot>> {
+        let mut channels : HashMap<Channel, Vec<Pair>> = HashMap::new();
+        if let Some(fs) = s.orderbook {
+            channels.insert(Channel::LiveFullOrderBook, fs.symbols);
+        }
+        if let Some(fs) = s.trades {
+            channels.insert(Channel::LiveTrades, fs.symbols);
+        }
         match exchange {
-            Exchange::Bitstamp => Ok(Box::new(BitstampStreamingApi::new_bot(creds, String::from("btcusd"), vec![Channel::LiveFullOrderBook], r).await?)),
-            Exchange::Bittrex => Ok(Box::new(BittrexStreamingApi::new_bot(creds, &Pair::BTC_USD, vec![Channel::LiveFullOrderBook], r).await?)),
+            Exchange::Bitstamp => Ok(Box::new(BitstampStreamingApi::new_bot(creds, channels, r).await?)),
+            Exchange::Bittrex => Ok(Box::new(BittrexStreamingApi::new_bot(creds, channels, r).await?)),
             _ => unimplemented!()
         }
     }
@@ -58,7 +66,7 @@ impl Coinnect {
     pub fn new_from_file(exchange: Exchange,
                          name: &str,
                          path: PathBuf)
-                         -> Result<Box<ExchangeApi>> {
+                         -> Result<Box<dyn ExchangeApi>> {
         match exchange {
             Exchange::Bitstamp => {
                 Ok(Box::new(BitstampApi::new(BitstampCreds::new_from_file(name, path)?)?))

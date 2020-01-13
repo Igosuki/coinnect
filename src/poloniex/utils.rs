@@ -7,8 +7,6 @@ use crate::error::*;
 use crate::types::Currency;
 use crate::types::Pair;
 use crate::types::Pair::*;
-use bytes::buf::ext::Reader;
-use bytes::Buf;
 
 lazy_static! {
     static ref PAIRS_STRING: BidirMap<Pair, &'static str> = {

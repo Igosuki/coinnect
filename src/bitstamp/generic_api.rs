@@ -2,23 +2,13 @@
 //! This a more convenient and safe way to deal with the exchange since methods return a Result<>
 //! but this generic API does not provide all the functionnality that Bitstamp offers.
 
-use crate::exchange::{ExchangeApi, FResult};
+use crate::exchange::{ExchangeApi};
 use crate::bitstamp::api::BitstampApi;
 use crate::bitstamp::utils;
 
 use crate::error::*;
 use crate::types::*;
 use crate::helpers;
-use std::net::TcpStream;
-use url::Url;
-use log::*;
-use futures::{Future, Stream};
-use futures_util::TryFutureExt;
-use futures::stream::{SplitSink, StreamExt, SplitStream, TryStreamExt, TryStream};
-use awc::error::WsClientError;
-use actix_codec::Framed;
-use awc::BoxedSocket;
-use awc::ws::{Codec, Frame};
 use async_trait::async_trait;
 
 #[async_trait]

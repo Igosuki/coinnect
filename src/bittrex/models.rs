@@ -1,5 +1,9 @@
-use serde::{Serialize, Deserialize};
+#[allow(non_snake_case)]
 
+use serde::{Serialize, Deserialize};
+use crate::types::LiveTrade;
+
+#[allow(non_snake_case)]
 #[derive(Debug, Serialize, Deserialize)]
 pub(crate) struct FillEntry {
     #[serde(alias = "F")]
@@ -21,6 +25,7 @@ pub(crate) struct FillEntry {
 
 }
 
+#[allow(non_snake_case)]
 #[derive(Debug, Serialize, Deserialize)]
 pub(crate) struct OrderPair {
     #[serde(alias = "Q")]
@@ -29,6 +34,7 @@ pub(crate) struct OrderPair {
     pub R: f32,
 }
 
+#[allow(non_snake_case)]
 #[derive(Debug, Serialize, Deserialize)]
 pub(crate) struct ExchangeState {
     #[serde(alias = "M")]
@@ -43,6 +49,7 @@ pub(crate) struct ExchangeState {
     Fills: Vec<FillEntry>,
 }
 
+#[allow(non_snake_case)]
 #[derive(Debug, Serialize, Deserialize)]
 pub(crate) struct Order {
     #[serde(alias = "U")]
@@ -87,6 +94,7 @@ pub(crate) struct Order {
     Updated: i64,
 }
 
+#[allow(non_snake_case)]
 #[derive(Debug, Serialize, Deserialize)]
 pub(crate) struct OrderDelta {
     #[serde(alias = "w")]
@@ -106,6 +114,7 @@ pub(crate) enum TradeType {
     UPDATE = 2,
 }
 
+#[allow(non_snake_case)]
 #[derive(Debug, Serialize, Deserialize)]
 pub(crate) struct OrderLog {
     #[serde(alias = "TY")]
@@ -116,24 +125,26 @@ pub(crate) struct OrderLog {
     pub Quantity: f32,
 }
 
+#[allow(non_snake_case)]
 #[derive(Debug, Serialize, Deserialize)]
 pub(crate) struct Fill {
     #[serde(alias = "FI")]
     FillId: i32,
     #[serde(alias = "OT")]
-    OrderType: String,
+    pub OrderType: String,
     #[serde(alias = "R")]
-    Rate: f32,
+    pub Rate: f32,
     #[serde(alias = "Q")]
-    Quantity: f32,
+    pub Quantity: f32,
     #[serde(alias = "T")]
-    TimeStamp: i64,
+    pub TimeStamp: i64,
 }
 
+#[allow(non_snake_case)]
 #[derive(Debug, Serialize, Deserialize)]
 pub(crate) struct MarketDelta {
     #[serde(alias = "M")]
-    MarketName: String,
+    pub MarketName: String,
     #[serde(alias = "N")]
     Nonce: i32,
     #[serde(alias = "Z")]
@@ -141,9 +152,10 @@ pub(crate) struct MarketDelta {
     #[serde(alias = "S")]
     pub Sells: Vec<OrderLog>,
     #[serde(alias = "f")]
-    Fills: Vec<Fill>,
+    pub Fills: Vec<Fill>,
 }
 
+#[allow(non_snake_case)]
 #[derive(Debug, Serialize, Deserialize)]
 pub(crate) struct SummaryDelta {
     #[serde(alias = "M")]
@@ -174,6 +186,7 @@ pub(crate) struct SummaryDelta {
     Created: i64,
 }
 
+#[allow(non_snake_case)]
 #[derive(Debug, Serialize, Deserialize)]
 pub(crate) struct SummaryDeltaResponse {
     #[serde(alias = "N")]
@@ -182,6 +195,3 @@ pub(crate) struct SummaryDeltaResponse {
     Deltas: Vec<SummaryDelta>,
 }
 
-pub(crate) struct LiveEvent {
-
-}

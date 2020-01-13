@@ -2,7 +2,6 @@ use serde_json::{Value, Map};
 use bytes::Buf;
 use bytes::buf::ext::Reader;
 use crate::error::*;
-use bytes::buf::BufExt as _;
 
 pub fn deserialize_json(json_string: &str) -> Result<Map<String, Value>> {
     let data: Value = match serde_json::from_str(json_string) {

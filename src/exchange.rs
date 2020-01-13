@@ -6,16 +6,33 @@ use std::str::FromStr;
 
 use crate::error::*;
 use crate::types::*;
-use futures::{Future, Stream};
+use futures::{Future};
 use async_trait::async_trait;
+use serde::{Deserializer, Deserialize};
+use serde::de;
 
 #[derive(Debug, PartialEq, Clone, Copy, Eq, Hash, Deserialize, Serialize)]
+#[serde(from = "String")]
 pub enum Exchange {
     Bitstamp,
     Kraken,
     Poloniex,
     Bittrex,
     Gdax,
+}
+
+pub trait DeserializeWith: Sized {
+    fn deserialize_with<'de, D>(de: D) -> ::std::result::Result<Self, D::Error>
+        where D: Deserializer<'de>;
+}
+
+impl DeserializeWith for Exchange {
+    fn deserialize_with<'de, D>(dez: D) -> ::std::result::Result<Self, D::Error> where D: Deserializer<'de> {
+        let s = String::deserialize(dez)?;
+
+        let e : Self = Exchange::from_str(s.as_str()).map_err(|e| de::Error::custom(format!("{:?}", e)))?;
+        Ok(e)
+    }
 }
 
 impl Into<String> for Exchange {
@@ -27,6 +44,12 @@ impl Into<String> for Exchange {
             Exchange::Bittrex => "Bittrex".to_string(),
             Exchange::Gdax => "Gdax".to_string(),
         }
+    }
+}
+
+impl From<String> for Exchange {
+    fn from(s: String) -> Self {
+        Self::from_str(s.as_ref()).unwrap()
     }
 }
 
@@ -45,7 +68,7 @@ impl FromStr for Exchange {
     }
 }
 
-pub type FResult<T> = Future<Output = Result<T>>;
+pub type FResult<T> = dyn Future<Output = Result<T>>;
 
 #[async_trait]
 pub trait ExchangeApi: Debug {
@@ -73,4 +96,15 @@ pub trait ExchangeApi: Debug {
     /// Retrieve the current amounts of all the currencies that the account holds
     /// The amounts returned are available (not used to open an order)
     async fn balances(&mut self) -> Result<Balances>;
+}
+
+#[derive(Clone, Debug, Deserialize)]
+pub struct FeedSettings {
+    pub symbols: Vec<Pair>
+}
+
+#[derive(Clone, Debug, Deserialize)]
+pub struct ExchangeSettings {
+    pub orderbook: Option<FeedSettings>,
+    pub trades: Option<FeedSettings>,
 }

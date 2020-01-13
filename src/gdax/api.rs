@@ -3,7 +3,7 @@
 
 
 use hyper::{Client, Uri, Request, Body, Method};
-use hyper::header::{CONTENT_TYPE,USER_AGENT,HeaderName};
+use hyper::header::{CONTENT_TYPE,USER_AGENT};
 
 use hyper_tls::HttpsConnector;
 
@@ -11,7 +11,6 @@ use serde_json::Value;
 use serde_json::value::Map;
 
 use std::collections::HashMap;
-use std::io::Read;
 use std::thread;
 use std::time::Duration;
 
@@ -24,11 +23,7 @@ use crate::types::Pair;
 use crate::gdax::utils;
 use crate::types::*;
 use hyper::client::HttpConnector;
-use futures::Stream;
-use futures::{FutureExt, TryFutureExt};
-use futures::io::{AsyncReadExt, AsyncRead};
-use std::convert::TryInto;
-use futures::select;
+use futures::{TryFutureExt};
 use bytes::buf::BufExt as _;
 use crate::helpers::json;
 

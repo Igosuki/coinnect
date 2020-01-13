@@ -11,8 +11,7 @@ use std::collections::HashMap;
 use chrono::prelude::*;
 use crate::error::*;
 use actix_codec::Framed;
-use awc::{error::WsProtocolError, ws::{Codec, Message}, Client, BoxedSocket};
-use std::time::Duration;
+use awc::{ws::{Codec}, Client, BoxedSocket};
 
 // Helper functions
 

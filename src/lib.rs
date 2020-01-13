@@ -32,7 +32,6 @@
 // Avoid warning for the Crypto-currency about quotes.
 #![allow(doc_markdown)]
 
-#[macro_use]
 extern crate hyper;
 extern crate sha2;
 extern crate hmac;
@@ -51,7 +50,6 @@ extern crate bigdecimal;
 extern crate actix_web;
 extern crate actix;
 #[macro_use] extern crate actix_derive;
-#[macro_use] extern crate pin_project;
 extern crate url;
 #[macro_use] extern crate log;
 extern crate futures;
@@ -64,6 +62,7 @@ extern crate libflate;
 pub mod coinnect;
 pub mod exchange;
 pub mod exchange_bot;
+#[allow(deprecated)]
 pub mod error;
 pub mod types;
 pub mod helpers;
@@ -73,5 +72,3 @@ pub mod poloniex;
 pub mod kraken;
 pub mod bittrex;
 pub mod gdax;
-
-use crate::error::{Result};

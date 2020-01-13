@@ -1,39 +1,29 @@
 use crate::coinnect::Credentials;
-use crate::exchange_bot::{DefaultWsActor, WsHandler, ExchangeBot};
+use crate::exchange_bot::{ExchangeBot};
 use crate::error::*;
 use super::models::*;
-use bytes::Bytes;
-use bytes::Buf;
 use serde_json::Value;
 use std::io::Read;
-use futures::stream::{SplitSink, StreamExt};
-use actix::{Context, io::SinkWrite, Actor, Handler, StreamHandler, AsyncContext, ActorContext, Addr, SystemService, Recipient};
-use awc::{
-    error::WsProtocolError,
-    ws::{Codec, Frame, Message},
-    Client, BoxedSocket,
-};
-use actix_codec::{AsyncRead, AsyncWrite, Framed};
-use actix_rt::{System, Arbiter};
-use crate::types::{LiveEvent, Channel, Orderbook, Pair, LiveAggregatedOrderBook};
+use actix::{Addr, Recipient};
+use crate::types::{LiveEvent, Channel, Orderbook, Pair, LiveAggregatedOrderBook, LiveEventEnveloppe, LiveTrade};
 use signalr_rs::hub::client::{HubClientError, HubClientHandler, HubClient, HubQuery};
 use serde::de::DeserializeOwned;
 use libflate::deflate::Decoder;
-use chrono::prelude::*;
 use bigdecimal::BigDecimal;
-use std::hash::{Hash, Hasher};
-use std::collections::BTreeMap;
-use std::thread;
-use std::time::Duration;
+use std::collections::{BTreeMap, HashMap, HashSet};
+use crate::exchange::Exchange;
+use std::rc::Rc;
+use std::cell::RefCell;
 
 #[derive(Debug)]
 pub struct BittrexStreamingApi {
     api_key: String,
     api_secret: String,
     customer_id: String,
-    pub recipients: Vec<Recipient<LiveEvent>>,
-    channels: Vec<Channel>,
-    agg: LiveAggregatedOrderBook,
+    pub recipients: Vec<Recipient<LiveEventEnveloppe>>,
+    books: Rc<RefCell<HashMap<Pair, LiveAggregatedOrderBook>>>,
+    order_book_pairs: HashSet<Pair>,
+    trade_pairs: HashSet<Pair>
 }
 
 pub struct BittrexBot {
@@ -47,30 +37,49 @@ impl ExchangeBot for BittrexBot {
 }
 
 impl BittrexStreamingApi {
-    pub async fn new_bot<C: Credentials>(creds: C, currency_pair: &'static Pair, channels: Vec<Channel>, recipients: Vec<Recipient<LiveEvent>>) -> Result<BittrexBot> {
-        let pair : &'static str = *super::utils::get_pair_string(&currency_pair).expect(format!("Unable to find matching pair for {:?} for Bittrex", currency_pair).as_str());
+    pub async fn new_bot<C: Credentials>(creds: C, channels: HashMap<Channel, Vec<Pair>>, recipients: Vec<Recipient<LiveEventEnveloppe>>) -> Result<BittrexBot> {
+//        let pair : &'static str = *super::utils::get_pair_string(&currency_pair).expect(format!("Unable to find matching pair for {:?} for Bittrex", currency_pair).as_str());
+
         let hub = "c2";
+        //        . expect(format!("Unable to find matching pair for {:?} for Bittrex", currency_pair).as_str()
+        // Live order book pairs
+        let order_book_pairs: HashSet<Pair> = channels.get(&Channel::LiveFullOrderBook).unwrap_or(&vec![])
+            .iter().filter(|currency_pair| super::utils::get_pair_string(&currency_pair).is_some()).map(|&p| p).collect();
+        // Live trade pairs
+        let trade_pairs : HashSet<Pair> = channels.get(&Channel::LiveTrades).unwrap_or(&vec![])
+            .iter().filter(|currency_pair| super::utils::get_pair_string(&currency_pair).is_some()).map(|&p| p).collect();
+        debug!("{:?}, {:?}", order_book_pairs, trade_pairs);
         let api = Box::new(BittrexStreamingApi {
             api_key: creds.get("api_key").unwrap_or_default(),
             api_secret: creds.get("api_secret").unwrap_or_default(),
             customer_id: creds.get("customer_id").unwrap_or_default(),
             recipients,
-            channels,
-            agg: LiveAggregatedOrderBook {
-                depth: 5,
-                pair: *currency_pair,
-                asks_by_price: BTreeMap::new(),
-                bids_by_price: BTreeMap::new(),
-                last_asks: vec![],
-                last_bids: vec![],
-            },
+            books: Rc::new(RefCell::new(HashMap::new())),
+            order_book_pairs: order_book_pairs.clone(),
+            trade_pairs: trade_pairs.clone(),
         });
+        let rc = api.books.clone();
+
+        let mut books = rc.borrow_mut();
+        for &pair in &order_book_pairs {
+            books.insert(pair, LiveAggregatedOrderBook::default(pair));
+        }
+
+        // SignalR Client
         let client = HubClient::new(hub, "https://socket.bittrex.com/signalr/", 100, api).await;
         match client {
             Ok(addr) => {
-//                addr.do_send(HubQuery::new(hub.to_string(), "SubscribeToSummaryDeltas".to_string(), "".to_string(), "0".to_string()));
-                addr.do_send(HubQuery::new(hub.to_string(), "QueryExchangeState".to_string(), vec![pair], "QE2".to_string()));
-                addr.do_send(HubQuery::new(hub.to_string(), "SubscribeToExchangeDeltas".to_string(), vec![pair], "1".to_string()));
+                if !order_book_pairs.is_empty() {
+                    for &pair in &order_book_pairs {
+                        let currency = *super::utils::get_pair_string(&pair).unwrap();
+                        addr.do_send(HubQuery::new(hub.to_string(), "QueryExchangeState".to_string(), vec![currency.to_string()], "QE2".to_string()));
+                    }
+                }
+                if !trade_pairs.is_empty() || !order_book_pairs.is_empty() {
+                    let all_pairs : HashSet<Pair> = trade_pairs.union(&order_book_pairs).map(|&p| p).collect();
+                    let currencies : Vec<String> = all_pairs.iter().map(|p| (*super::utils::get_pair_string(p).unwrap()).to_string()).collect();
+                    addr.do_send(HubQuery::new(hub.to_string(), "SubscribeToExchangeDeltas".to_string(), currencies, "1".to_string()));
+                }
                 return Ok(BittrexBot { addr });
             }
             Err(e) => {
@@ -78,14 +87,12 @@ impl BittrexStreamingApi {
             }
         }
     }
-}
 
-impl BittrexStreamingApi {
     fn deflate<T>(binary: &String) -> Result<T> where T: DeserializeOwned {
         let decoded = base64::decode(binary).map_err(|e| ErrorKind::Hub(HubClientError::Base64DecodeError(e)))?;
         let mut decoder = Decoder::new(&decoded[..]);
         let mut decoded_data: Vec<u8> = Vec::new();
-        decoder.read_to_end(&mut decoded_data);
+        decoder.read_to_end(&mut decoded_data).map_err(|_| ErrorKind::Hub(HubClientError::InvalidData { data: vec!["cannot deflate".to_string()]}))?;
         let v: &[u8] = &decoded_data;
         serde_json::from_slice::<T>(v).map_err(|e| ErrorKind::Hub(HubClientError::ParseError(e)).into())
     }
@@ -102,41 +109,68 @@ impl BittrexStreamingApi {
     }
 }
 
-const DEFAULT_BOOK_DEPTH : i8 = 5;
-
 impl HubClientHandler for BittrexStreamingApi {
     fn connected(&self) {}
 
-    fn error(&self, id: Option<&str>, msg: &Value) {}
+    fn error(&self, _: Option<&str>, _: &Value) {}
 
     fn handle(&mut self, method: &str, message: &Value) {
-        let live_event = match method {
+        let live_events = match method {
             "uE" => {
                 let delta = BittrexStreamingApi::deflate_array::<MarketDelta>(message).unwrap();
-                for op in delta.Sells {
-                    let kp = (BigDecimal::from(op.Rate), BigDecimal::from(op.Quantity));
-                    if op.Quantity == 0.0 {
-                        self.agg.asks_by_price.remove(&kp.0.clone());
+                let pair = super::utils::get_pair_enum(delta.MarketName.as_str());
+                if pair.is_none() {
+                    return;
+                }
+                let mut events = vec![];
+                let current_pair = *pair.unwrap();
+                if self.order_book_pairs.contains(&current_pair) {
+                    let mut books = self.books.borrow_mut();
+                    let default_book = LiveAggregatedOrderBook::default(current_pair);
+                    let mut agg = books.entry(current_pair).or_insert(default_book);
+                    for op in delta.Sells {
+                        let kp = (BigDecimal::from(op.Rate), BigDecimal::from(op.Quantity));
+                        let asks = &mut agg.asks_by_price;
+                        if op.Quantity == 0.0 {
+                            asks.remove(&kp.0.clone());
+                        } else {
+                            asks.entry(kp.0.clone()).or_insert(kp);
+                        }
+                    };
+                    for op in delta.Buys {
+                        let kp = (BigDecimal::from(op.Rate), BigDecimal::from(op.Quantity));
+                        let bids = &mut agg.bids_by_price;
+                        if op.Quantity == 0.0 {
+                            bids.remove(&kp.0.clone());
+                        } else {
+                            bids.entry(kp.0.clone()).or_insert(kp);
+                        }
+                    };
+                    let latest_order_book: Orderbook = agg.order_book();
+                    if latest_order_book.asks == agg.last_asks && latest_order_book.bids == agg.last_bids {
+                        debug!("Order book top unchanged, not flushing");
                     } else {
-                        self.agg.asks_by_price.entry(kp.0.clone()).or_insert(kp);
+                        agg.last_asks = latest_order_book.asks.clone();
+                        agg.last_bids = latest_order_book.bids.clone();
+                        events.push(LiveEvent::LiveOrderbook(latest_order_book));
                     }
-                };
-                for op in delta.Buys {
-                    let kp = (BigDecimal::from(op.Rate), BigDecimal::from(op.Quantity));
-                    if op.Quantity == 0.0 {
-                        self.agg.bids_by_price.remove(&kp.0.clone());
-                    } else {
-                        self.agg.bids_by_price.entry(kp.0.clone()).or_insert(kp);
+                }
+                if self.trade_pairs.contains(&current_pair) {
+                    for fill in delta.Fills {
+                        let lt = LiveTrade {
+                            event_ms: fill.TimeStamp,
+                            pair: format!("{:?}", current_pair),
+                            amount: fill.Quantity,
+                            price: BigDecimal::from(fill.Rate),
+                            tt: fill.OrderType.into(),
+                        };
+                        events.push(LiveEvent::LiveTrade(lt));
                     }
-                };
-                let mut latest_order_book: Orderbook = self.agg.order_book(DEFAULT_BOOK_DEPTH);
-                if latest_order_book.asks == self.agg.last_asks && latest_order_book.bids == self.agg.last_bids {
-                    debug!("Order book top {} unchanged, not flushing", DEFAULT_BOOK_DEPTH);
+                }
+                if events.is_empty() {
                     Err(())
                 } else {
-                    self.agg.last_asks = latest_order_book.asks.clone();
-                    self.agg.last_bids = latest_order_book.bids.clone();
-                    Ok(LiveEvent::LiveOrderbook(latest_order_book))
+                    Ok(events)
                 }
             }
             "uS" => {
@@ -145,29 +179,39 @@ impl HubClientHandler for BittrexStreamingApi {
             }
             s if s.starts_with("QE") => {
                 let state = BittrexStreamingApi::deflate_string::<ExchangeState>(message).unwrap();
+                let pair = super::utils::get_pair_enum(state.MarketName.as_str());
+                if pair.is_none() {
+                    return;
+                }
+                let mut books = self.books.borrow_mut();
+                let current_pair = *pair.unwrap();
+                let default_book = LiveAggregatedOrderBook::default(current_pair);
+                let mut agg = books.entry(current_pair).or_insert(default_book);
                 for op in state.Sells {
                     let kp = (BigDecimal::from(op.R), BigDecimal::from(op.Q));
-                    self.agg.asks_by_price.entry(kp.0.clone()).or_insert(kp);
+                    agg.asks_by_price.entry(kp.0.clone()).or_insert(kp);
                 };
                 for op in state.Buys {
                     let kp = (BigDecimal::from(op.R), BigDecimal::from(op.Q));
-                    self.agg.bids_by_price.entry(kp.0.clone()).or_insert(kp);
+                    agg.bids_by_price.entry(kp.0.clone()).or_insert(kp);
                 };
-                let latest_order_book: Orderbook = self.agg.order_book(DEFAULT_BOOK_DEPTH);
-                Ok(LiveEvent::LiveOrderbook(latest_order_book.clone()))
+                let latest_order_book: Orderbook = agg.order_book();
+                Ok(vec![LiveEvent::LiveOrderbook(latest_order_book.clone())])
             }
             _ => {
                 debug!("Unknown message : method {:?} message {:?}", method, message);
                 Err(())
             }
         };
-        if live_event.is_ok() {
-            let le = live_event.unwrap();
-            let vec = self.recipients.clone();
-            for r in &vec {
-                let le: LiveEvent = le.clone();
-                r.do_send(le).unwrap();
+        if let Ok(les) = live_events {
+            let recipients = self.recipients.clone();
+            for le in les {
+                for r in &recipients {
+                    let le: LiveEvent = le.clone();
+                    r.do_send(LiveEventEnveloppe(Exchange::Bittrex, le)).unwrap();
+                }
             }
+
         }
     }
 }

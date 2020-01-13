@@ -5,8 +5,7 @@ use hmac::{Hmac, Mac};
 use sha2::Sha512;
 
 use hyper::{Client, Uri, Request, Body, Method};
-use hyper::header;
-use hyper::header::{HeaderName, CONTENT_TYPE};
+use hyper::header::{CONTENT_TYPE};
 use hyper_tls::HttpsConnector;
 
 use data_encoding::HEXLOWER;
@@ -15,24 +14,19 @@ use serde_json::Value;
 use serde_json::value::Map;
 
 use std::collections::HashMap;
-use std::io::Read;
 use std::thread;
 use std::time::Duration;
 
-use futures::Stream;
 use futures::{TryFutureExt};
-use futures::io::{AsyncReadExt, AsyncRead};
 
 use crate::error::*;
 use crate::helpers::{self, json};
 
 use crate::exchange::Exchange;
 use crate::coinnect::Credentials;
-use crate::poloniex::utils;
 
 use hyper::client::HttpConnector;
 use bytes::buf::BufExt as _;
-use hyper::header::HeaderValue;
 
 const KEY_HEADER: &str = "Key";
 const SIGN_HEADER: &str = "Sign";

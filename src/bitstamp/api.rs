@@ -2,16 +2,14 @@
 //! Please see examples for more informations.
 
 
-use hyper::{Client, Response, Body, Request, Uri, Method};
+use hyper::{Client, Body, Request, Uri, Method};
 use hyper::header::CONTENT_TYPE;
-use hyper::header::HeaderName;
 use hyper_tls::HttpsConnector;
 
 use serde_json::Value;
 use serde_json::value::Map;
 
 use std::collections::HashMap;
-use std::io::{Read};
 use std::thread;
 use std::time::Duration;
 
@@ -24,14 +22,8 @@ use crate::types::Pair;
 use crate::bitstamp::utils;
 use crate::types::*;
 use hyper::client::HttpConnector;
-use futures::Stream;
-use futures::{FutureExt, TryFutureExt};
-use futures::io::{AsyncReadExt, AsyncRead};
-use std::convert::TryInto;
-use futures::select;
+use futures::{TryFutureExt};
 use bytes::buf::BufExt as _;
-use futures::executor::ThreadPool;
-use tokio::task;
 use awc::http::StatusCode;
 
 #[derive(Debug)]

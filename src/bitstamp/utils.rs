@@ -13,8 +13,7 @@ use crate::types::Currency;
 use crate::types::Pair;
 use crate::types::Pair::*;
 use bytes::buf::ext::Reader;
-use bytes::{Bytes, Buf};
-use bytes::buf::BufExt as _;
+use bytes::{Buf};
 
 lazy_static! {
     static ref PAIRS_STRING: BidirMap<Pair, &'static str> = {

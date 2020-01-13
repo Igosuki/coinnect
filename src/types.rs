@@ -10,8 +10,9 @@ pub type Volume = BigDecimal;
 
 pub type Balances = HashMap<Currency, Amount>;
 use chrono::prelude::*;
+use crate::exchange::Exchange;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub enum Channel {
     LiveTrades,
     LiveOrders,
@@ -67,7 +68,7 @@ impl Orderbook {
 
 #[derive(Debug)]
 pub struct LiveAggregatedOrderBook {
-    pub depth: usize,
+    pub depth: i8,
     pub pair: Pair,
     pub asks_by_price: BTreeMap<Price, (Price, Volume)>,
     pub bids_by_price: BTreeMap<Price, (Price, Volume)>,
@@ -75,10 +76,23 @@ pub struct LiveAggregatedOrderBook {
     pub last_bids: Vec<(Price, Volume)>,
 }
 
+const DEFAULT_BOOK_DEPTH : i8 = 5;
+
 impl LiveAggregatedOrderBook {
-    pub fn order_book(&self, depth: i8) -> Orderbook {
-        let asks : Vec<(Price, Volume)> = self.asks_by_price.iter().map(|(k, v)| v.clone()).take(self.depth).rev().collect();
-        let bids: Vec<(Price, Volume)> = self.bids_by_price.iter().rev().map(|(k, v)| v.clone()).take(self.depth).rev().collect();
+    pub fn default(pair: Pair) -> LiveAggregatedOrderBook {
+        LiveAggregatedOrderBook {
+            depth: DEFAULT_BOOK_DEPTH,
+            pair,
+            asks_by_price: BTreeMap::new(),
+            bids_by_price: BTreeMap::new(),
+            last_asks: vec![],
+            last_bids: vec![],
+        }
+    }
+
+    pub fn order_book(&self) -> Orderbook {
+        let asks : Vec<(Price, Volume)> = self.asks_by_price.iter().map(|(_, v)| v.clone()).take(self.depth as usize).rev().collect();
+        let bids: Vec<(Price, Volume)> = self.bids_by_price.iter().rev().map(|(_, v)| v.clone()).take(self.depth as usize).rev().collect();
         Orderbook {
             timestamp: Utc::now().timestamp_millis(),
             pair: self.pair,
@@ -109,6 +123,17 @@ pub enum OrderType {
 pub enum TradeType {
     Sell,
     Buy,
+    None
+}
+
+impl From<String> for TradeType {
+    fn from(s: String) -> Self {
+        match s.to_lowercase().as_str() {
+            "sell" => TradeType::Sell,
+            "buy" => TradeType::Buy,
+            _ => TradeType::None,
+        }
+    }
 }
 
 impl From<i64> for TradeType {
@@ -165,6 +190,10 @@ pub enum LiveEvent {
     LiveOrderbook(Orderbook),
     Noop
 }
+
+#[derive(Message, Clone, Debug)]
+#[rtype(result = "()")]
+pub struct LiveEventEnveloppe(pub Exchange, pub LiveEvent);
 
 /// Currency lists all currencies that can be traded on supported exchanges.
 /// Update date : 27/10/2017.
@@ -496,7 +525,7 @@ pub enum Currency {
 ///
 /// Note 2 : 1ST and 2GIVE have been renammed "_1ST" and "_2GIVE" since variables name cannot start
 /// with a number.
-#[derive(Debug, Copy, Clone, PartialEq, Deserialize, Serialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Deserialize, Serialize)]
 #[allow(non_camel_case_types)]
 pub enum Pair {
     _1ST_BTC,

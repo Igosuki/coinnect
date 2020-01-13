@@ -7,8 +7,6 @@ use hmac::{Hmac, Mac};
 use sha2::{Sha256, Sha512, Digest};
 
 use hyper::{Client, Uri, Method, Request, Body};
-use hyper::header;
-use hyper::header::HeaderName;
 use hyper_tls::HttpsConnector;
 
 use data_encoding::BASE64;
@@ -17,7 +15,6 @@ use serde_json::Value;
 use serde_json::value::Map;
 
 use std::collections::HashMap;
-use std::io::Read;
 use std::thread;
 use std::time::Duration;
 use std::str;
@@ -27,13 +24,8 @@ use crate::helpers;
 
 use crate::exchange::Exchange;
 use crate::coinnect::Credentials;
-use crate::kraken::utils;
 use hyper::client::HttpConnector;
-use futures::Stream;
-use futures::{FutureExt, TryFutureExt};
-use futures::io::{AsyncReadExt, AsyncRead};
-use std::convert::TryInto;
-use futures::select;
+use futures::{TryFutureExt};
 use bytes::buf::BufExt as _;
 use crate::helpers::json;
 
@@ -106,7 +98,7 @@ impl KrakenApi {
             &helpers::url_encode_hashmap(params);
         let url: Uri = string.as_str().parse().map_err(|_e| ErrorKind::BadParse)?;
 
-        self.block_or_continue();
+        self.block_or_continue().await;
         let buf = self.http_client.get(url).and_then(|resp| hyper::body::aggregate(resp.into_body())).await?;
         self.last_request = helpers::get_unix_timestamp_ms();
         let reader = buf.reader();

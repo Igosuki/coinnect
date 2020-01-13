@@ -19,7 +19,7 @@ mod coinnect_tests {
     #[test]
     fn can_create_new_api_connection_to_bitstamp() {
         let creds = BitstampCreds::new("test", "bs_api_key", "bs_api_secret", "bs_cust_id");
-        let api: Box<ExchangeApi> = coinnect_rt::new(Exchange::Bitstamp, creds).unwrap();
+        let api: Box<dyn ExchangeApi> = coinnect_rt::new(Exchange::Bitstamp, creds).unwrap();
 
         assert_eq!(format!("{:?}", api),
                    "BitstampApi { last_request: 0, api_key: \"bs_api_key\", api_secret: \

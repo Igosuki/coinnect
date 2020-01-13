@@ -5,7 +5,7 @@
 use bigdecimal::BigDecimal;
 use std::str::FromStr;
 
-use crate::exchange::{ExchangeApi, FResult};
+use crate::exchange::{ExchangeApi};
 use crate::bittrex::api::BittrexApi;
 
 use crate::error::*;
@@ -13,8 +13,6 @@ use crate::types::*;
 use crate::bittrex::utils;
 use crate::helpers;
 use async_trait::async_trait;
-
-use futures::{Future, Stream};
 
 #[async_trait]
 impl ExchangeApi for BittrexApi {

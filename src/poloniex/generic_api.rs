@@ -2,7 +2,7 @@
 //! This a more convenient and safe way to deal with the exchange since methods return a Result<>
 //! but this generic API does not provide all the functionnality that Poloniex offers.
 
-use crate::exchange::{ExchangeApi, FResult};
+use crate::exchange::{ExchangeApi};
 use crate::poloniex::api::PoloniexApi;
 
 use bigdecimal::BigDecimal;
@@ -13,8 +13,6 @@ use crate::types::*;
 use crate::poloniex::utils;
 use crate::helpers;
 use async_trait::async_trait;
-
-use futures::{Future, Stream};
 
 #[async_trait]
 impl ExchangeApi for PoloniexApi {

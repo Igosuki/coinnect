@@ -1,23 +1,14 @@
-use std::path::PathBuf;
-use serde::{Serialize, Deserialize};
-use actix::{Context, io::SinkWrite, Actor, Handler, StreamHandler, AsyncContext, ActorContext, Addr, SystemService, Recipient};
-use awc::{error::WsProtocolError, ws::{Codec, Frame, Message}, Client, BoxedSocket, ws};
-use actix_codec::{AsyncRead, AsyncWrite, Framed};
-use actix_rt::{System, Arbiter};
+use actix::{Context, io::SinkWrite, Actor, Handler, StreamHandler, AsyncContext, ActorContext, Addr};
+use awc::{error::WsProtocolError, ws::{Codec, Frame, Message}, BoxedSocket};
+use actix_codec::{Framed};
 use std::time::{Duration, Instant};
 use bytes::Bytes;
 use futures::stream::{SplitSink, StreamExt};
-use bytes::Buf;
-use serde_json::{Value, Map};
-use std::collections::HashMap;
 use crate::helpers;
-use crate::error;
-use std::rc::Rc;
-use std::cell::RefCell;
 
 pub struct DefaultWsActor {
     inner: SinkWrite<Message, SplitSink<Framed<BoxedSocket, Codec>, Message>>,
-    handler: Box<WsHandler>,
+    handler: Box<dyn WsHandler>,
     hb: Instant
 }
 
@@ -46,14 +37,14 @@ impl Actor for DefaultWsActor
 }
 
 impl actix::Supervised for DefaultWsActor {
-    fn restarting(&mut self, ctx: &mut Context<DefaultWsActor>) {
+    fn restarting(&mut self, _: &mut Context<DefaultWsActor>) {
         println!("restarting exchange bot...");
     }
 }
 
 impl DefaultWsActor
 {
-    pub async fn new(wss_url: &str, handler: Box<WsHandler>) -> Addr<DefaultWsActor> {
+    pub async fn new(wss_url: &str, handler: Box<dyn WsHandler>) -> Addr<DefaultWsActor> {
         let c = helpers::new_ws_client(wss_url).await;
         let (sink, stream) = c.split();
         actix::Supervisor::start(|ctx| {
@@ -84,7 +75,7 @@ impl Handler<ClientCommand> for DefaultWsActor
 /// Handle server websocket messages
 impl StreamHandler<Result<Frame, WsProtocolError>> for DefaultWsActor
 {
-    fn handle(&mut self, msg: Result<Frame, WsProtocolError>, ctx: &mut Context<Self>) {
+    fn handle(&mut self, msg: Result<Frame, WsProtocolError>, _: &mut Context<Self>) {
         match msg {
             Ok(Frame::Ping(msg)) => {
                 self.hb = Instant::now();
@@ -117,3 +108,4 @@ pub trait ExchangeBot {
     /// Returns the address of the exchange actor
     fn is_connected(&self) -> bool;
 }
+
