@@ -6,7 +6,7 @@ use serde_json::Value;
 use std::io::Read;
 use actix::{Addr, Recipient};
 use crate::types::{LiveEvent, Channel, Orderbook, Pair, LiveAggregatedOrderBook, LiveEventEnveloppe, LiveTrade};
-use signalr_rs::hub::client::{HubClientError, HubClientHandler, HubClient, HubQuery};
+use signalr_rs::hub::client::{HubClientError, HubClientHandler, HubClient, HubQuery, RestartPolicy};
 use serde::de::DeserializeOwned;
 use libflate::deflate::Decoder;
 use bigdecimal::BigDecimal;
@@ -66,7 +66,7 @@ impl BittrexStreamingApi {
         }
 
         // SignalR Client
-        let client = HubClient::new(hub, "https://socket.bittrex.com/signalr/", 100, api).await;
+        let client = HubClient::new(hub, "https://socket.bittrex.com/signalr/", 100, RestartPolicy::Always, api).await;
         match client {
             Ok(addr) => {
                 if !order_book_pairs.is_empty() {
