@@ -6,7 +6,7 @@ use serde_json::Value;
 use std::io::Read;
 use actix::{Addr, Recipient};
 use crate::types::{LiveEvent, Channel, Orderbook, Pair, LiveAggregatedOrderBook, LiveEventEnveloppe, LiveTrade};
-use signalr_rs::hub::client::{HubClientError, HubClientHandler, HubClient, HubQuery, RestartPolicy};
+use signalr_rs::hub::client::{HubClientError, HubClientHandler, HubClient, HubQuery, RestartPolicy, PendingQuery};
 use serde::de::DeserializeOwned;
 use libflate::deflate::Decoder;
 use bigdecimal::BigDecimal;
@@ -36,12 +36,11 @@ impl ExchangeBot for BittrexBot {
     }
 }
 
-impl BittrexStreamingApi {
-    pub async fn new_bot<C: Credentials>(creds: C, channels: HashMap<Channel, Vec<Pair>>, recipients: Vec<Recipient<LiveEventEnveloppe>>) -> Result<BittrexBot> {
-//        let pair : &'static str = *super::utils::get_pair_string(&currency_pair).expect(format!("Unable to find matching pair for {:?} for Bittrex", currency_pair).as_str());
+const BITTREX_HUB: &'static str = "c2";
 
-        let hub = "c2";
-        //        . expect(format!("Unable to find matching pair for {:?} for Bittrex", currency_pair).as_str()
+impl BittrexStreamingApi {
+    /// Create a new bittrex exchange bot, unavailable channels and currencies are ignored
+    pub async fn new_bot<C: Credentials>(creds: C, channels: HashMap<Channel, Vec<Pair>>, recipients: Vec<Recipient<LiveEventEnveloppe>>) -> Result<BittrexBot> {
         // Live order book pairs
         let order_book_pairs: HashSet<Pair> = channels.get(&Channel::LiveFullOrderBook).unwrap_or(&vec![])
             .iter().filter(|currency_pair| super::utils::get_pair_string(&currency_pair).is_some()).map(|&p| p).collect();
@@ -66,19 +65,14 @@ impl BittrexStreamingApi {
         }
 
         // SignalR Client
-        let client = HubClient::new(hub, "https://socket.bittrex.com/signalr/", 100, RestartPolicy::Always, api).await;
+        let client = HubClient::new(BITTREX_HUB, "https://socket.bittrex.com/signalr/", 100, RestartPolicy::Always, api).await;
         match client {
             Ok(addr) => {
                 if !order_book_pairs.is_empty() {
                     for &pair in &order_book_pairs {
                         let currency = *super::utils::get_pair_string(&pair).unwrap();
-                        addr.do_send(HubQuery::new(hub.to_string(), "QueryExchangeState".to_string(), vec![currency.to_string()], "QE2".to_string()));
+                        addr.do_send(HubQuery::new(BITTREX_HUB.to_string(), "QueryExchangeState".to_string(), vec![currency.to_string()], "QE2".to_string()));
                     }
-                }
-                if !trade_pairs.is_empty() || !order_book_pairs.is_empty() {
-                    let all_pairs : HashSet<Pair> = trade_pairs.union(&order_book_pairs).map(|&p| p).collect();
-                    let currencies : Vec<String> = all_pairs.iter().map(|p| (*super::utils::get_pair_string(p).unwrap()).to_string()).collect();
-                    addr.do_send(HubQuery::new(hub.to_string(), "SubscribeToExchangeDeltas".to_string(), currencies, "1".to_string()));
                 }
                 return Ok(BittrexBot { addr });
             }
@@ -110,7 +104,15 @@ impl BittrexStreamingApi {
 }
 
 impl HubClientHandler for BittrexStreamingApi {
-    fn connected(&self) {}
+    fn on_connect(&self) -> Vec<Box<PendingQuery>> {
+        let mut conn_queries : Vec<Box<PendingQuery>> = vec![];
+        if !self.trade_pairs.is_empty() || !self.order_book_pairs.is_empty() {
+            let all_pairs : HashSet<Pair> = self.trade_pairs.union(&self.order_book_pairs).map(|&p| p).collect();
+            let currencies : Vec<String> = all_pairs.iter().map(|p| (*super::utils::get_pair_string(p).unwrap()).to_string()).collect();
+            conn_queries.push(Box::new(HubQuery::new(BITTREX_HUB.to_string(), "SubscribeToExchangeDeltas".to_string(), currencies, "1".to_string())));
+        }
+        conn_queries
+    }
 
     fn error(&self, _: Option<&str>, _: &Value) {}
 
