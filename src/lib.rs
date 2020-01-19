@@ -72,3 +72,5 @@ pub mod poloniex;
 pub mod kraken;
 pub mod bittrex;
 pub mod gdax;
+pub mod binance;
+pub mod utils;

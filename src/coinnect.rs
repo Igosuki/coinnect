@@ -10,6 +10,7 @@ use crate::poloniex::{PoloniexApi, PoloniexCreds};
 use crate::bittrex::{BittrexApi, BittrexCreds};
 use crate::bittrex::streaming_api::BittrexStreamingApi;
 use crate::gdax::{GdaxApi, GdaxCreds};
+use crate::binance::{BinanceApi, BinanceCreds};
 use crate::error::{Result};
 use crate::exchange::{Exchange, ExchangeApi, ExchangeSettings};
 use crate::bitstamp::{BitstampApi, BitstampCreds};
@@ -40,6 +41,7 @@ impl Coinnect {
             Exchange::Poloniex => Ok(Box::new(PoloniexApi::new(creds)?)),
             Exchange::Bittrex => Ok(Box::new(BittrexApi::new(creds)?)),
             Exchange::Gdax => Ok(Box::new(GdaxApi::new(creds)?)),
+            Exchange::Binance => unimplemented!(),
         }
     }
 
@@ -82,6 +84,9 @@ impl Coinnect {
             }
             Exchange::Gdax => {
                 Ok(Box::new(GdaxApi::new(GdaxCreds::new_from_file(name, path)?)?))
+            },
+            Exchange::Binance => {
+                Ok(Box::new(BinanceApi::new(BinanceCreds::new_from_file(name, path)?)?))
             }
         }
     }

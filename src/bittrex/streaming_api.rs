@@ -109,7 +109,9 @@ impl HubClientHandler for BittrexStreamingApi {
         if !self.trade_pairs.is_empty() || !self.order_book_pairs.is_empty() {
             let all_pairs : HashSet<Pair> = self.trade_pairs.union(&self.order_book_pairs).map(|&p| p).collect();
             let currencies : Vec<String> = all_pairs.iter().map(|p| (*super::utils::get_pair_string(p).unwrap()).to_string()).collect();
-            conn_queries.push(Box::new(HubQuery::new(BITTREX_HUB.to_string(), "SubscribeToExchangeDeltas".to_string(), currencies, "1".to_string())));
+            for currency in currencies {
+                conn_queries.push(Box::new(HubQuery::new(BITTREX_HUB.to_string(), "SubscribeToExchangeDeltas".to_string(), vec![currency], "1".to_string())));
+            }
         }
         conn_queries
     }

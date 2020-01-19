@@ -1,12 +1,23 @@
 //! Types definition used for handling returned data when generic API is used.
 
 use std::collections::{HashMap, BTreeMap};
-use bigdecimal::BigDecimal;
+use bigdecimal::{BigDecimal, ToPrimitive};
 use std::str::FromStr;
+use crate::error::{ErrorKind, Result};
 
 pub type Amount = BigDecimal;
 pub type Price = BigDecimal;
 pub type Volume = BigDecimal;
+
+pub trait BigDecimalConv {
+    fn as_f64(&self) -> Result<f64>;
+}
+
+impl BigDecimalConv for BigDecimal {
+    fn as_f64(&self) -> Result<f64> {
+        self.to_f64().ok_or(ErrorKind::BigDecimalTooLarge(self.clone()).into())
+    }
+}
 
 pub type Balances = HashMap<Currency, Amount>;
 use chrono::prelude::*;
@@ -238,12 +249,15 @@ pub enum Currency {
     BLITZ,
     BLK,
     BLOCK,
+    BAB,
+    BNB,
     BNT,
     BOB,
     BRK,
     BRX,
     BSD,
     BSTY,
+    BSV,
     BTA,
     BTC,
     BTCD,
@@ -453,6 +467,7 @@ pub enum Currency {
     TROLL,
     TRST,
     TRUST,
+    TUSD,
     TX,
     U,
     UBQ,
@@ -498,6 +513,7 @@ pub enum Currency {
     XSEED,
     XST,
     XTC,
+    XTP,
     XVC,
     XVG,
     XWC,
@@ -567,11 +583,15 @@ pub enum Pair {
     BLK_BTC,
     BLK_XMR,
     BLOCK_BTC,
+    BAB_USD,
+    BNB_USDT,
     BNT_BTC,
     BNT_ETH,
     BRK_BTC,
     BRX_BTC,
     BSD_BTC,
+    BSV_BTC,
+    BSV_USD,
     BTCD_BTC,
     BTCD_XMR,
     BTC_CAD,
@@ -632,6 +652,8 @@ pub enum Pair {
     ENRG_BTC,
     EOS_BTC,
     EOS_ETH,
+    EOS_USD,
+    EOS_USDT,
     ERC_BTC,
     ETC_BTC,
     ETC_ETH,
@@ -817,6 +839,7 @@ pub enum Pair {
     TRST_BTC,
     TRST_ETH,
     TRUST_BTC,
+    TUSD_BTC,
     TX_BTC,
     UBQ_BTC,
     UNB_BTC,
@@ -858,6 +881,7 @@ pub enum Pair {
     XVC_BTC,
     XVG_BTC,
     XWC_BTC,
+    XTP_BTC,
     XZC_BTC,
     ZCL_BTC,
     ZEC_BTC,

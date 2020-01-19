@@ -19,6 +19,7 @@ pub enum Exchange {
     Poloniex,
     Bittrex,
     Gdax,
+    Binance,
 }
 
 pub trait DeserializeWith: Sized {
@@ -43,6 +44,7 @@ impl Into<String> for Exchange {
             Exchange::Poloniex => "Poloniex".to_string(),
             Exchange::Bittrex => "Bittrex".to_string(),
             Exchange::Gdax => "Gdax".to_string(),
+            Exchange::Binance => "Binance".to_string(),
         }
     }
 }

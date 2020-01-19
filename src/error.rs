@@ -21,9 +21,16 @@ error_chain!{
         Hyper(hyper::Error);
         DataDecoding(data_encoding::DecodeError);
         Io(::std::io::Error);
+        Binance(binance::errors::Error);
+        ParseBigDecimal(bigdecimal::ParseBigDecimalError);
+
     }
 
     errors {
+        BigDecimalTooLarge(bd: bigdecimal::BigDecimal) {
+            description("Big decinal was too large")
+                display("{}", bd)
+        }
         Hub(e: signalr_rs::hub::client::HubClientError) {
             description("Hub client error")
                 display("{}", e)

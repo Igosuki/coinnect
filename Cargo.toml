@@ -65,3 +65,4 @@ signalr_rs = "0.1.2"
 base64 = "0.11.0"
 libflate = "0.1"
 derive_more = "0.99.2"
+binance = { git = "https://github.com/Igosuki/binance-rs.git" }
