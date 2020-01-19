@@ -65,6 +65,7 @@ impl FromStr for Exchange {
             "poloniex" => Ok(Exchange::Poloniex),
             "bittrex" => Ok(Exchange::Bittrex),
             "gdax" => Ok(Exchange::Gdax),
+            "binance" => Ok(Exchange::Binance),
             _ => Err(ErrorKind::InvalidExchange(input.to_string()).into()),
         }
     }

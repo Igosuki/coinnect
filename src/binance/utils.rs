@@ -13,19 +13,23 @@ use crate::types::Currency;
 use crate::types::Pair;
 use crate::types::Pair::*;
 
+const PAIRS_BYTES : &[u8] = include_bytes!("./PAIRS");
+
+lazy_static! {
+    //curl https://api.binance.com//api/v3/exchangeInfo | jq -r '.symbols | .[].baseAsset + "_" + .[].quoteAsset + "," '
+    static ref ALL_BINANCE_PAIRS : Vec<(&'static str, String)> = std::str::from_utf8(PAIRS_BYTES).unwrap().lines().map(|s| {
+        (s, s.to_string().replace("_", ""))
+    }).collect();
+}
+
 lazy_static! {
     static ref PAIRS_STRING: BidirMap<Pair, &'static str> = {
         let mut m = BidirMap::new();
-        m.insert(BCH_USD, "bch-usd");
-        m.insert(LTC_EUR, "ltc-eur");
-        m.insert(LTC_USD, "ltc-usd");
-        m.insert(LTC_BTC, "ltc-btc");
-        m.insert(ETH_EUR, "eth-eur");
-        m.insert(ETH_USD, "eth-usd");
-        m.insert(ETH_BTC, "eth-btc");
-        m.insert(BTC_GBP, "btc-gbp");
-        m.insert(BTC_EUR, "btc-eur");
-        m.insert(BTC_USD, "btc-usd");
+        for (pair, b_pair) in &*ALL_BINANCE_PAIRS {
+            serde_json::from_str(pair).map(|p_enum| {
+                m.insert(p_enum, b_pair.as_str());
+            });
+        }
         m
     };
 }
@@ -55,16 +59,8 @@ pub fn get_pair_enum(pair: &str) -> Option<&Pair> {
 /// assert_eq!(Some(Currency::USD), currency);
 /// ```
 pub fn get_currency_enum(currency: &str) -> Option<Currency> {
-    match currency {
-        "btc_balance" => Some(Currency::BTC),
-        "eur_balance" => Some(Currency::EUR),
-        "ltc_balance" => Some(Currency::LTC),
-        "gbp_balance" => Some(Currency::GBP),
-        "usd_balance" => Some(Currency::USD),
-        "eth_balance" => Some(Currency::ETH),
-        "bch_balance" => Some(Currency::BCH),
-        _ => None,
-    }
+    let c : Option<Currency> = serde_json::from_str(currency).ok();
+    c
 }
 
 /// Return the currency string associated with the
@@ -80,14 +76,5 @@ pub fn get_currency_enum(currency: &str) -> Option<Currency> {
 /// assert_eq!(currency, Some("USD".to_string()));
 /// ```
 pub fn get_currency_string(currency: Currency) -> Option<String> {
-    match currency {
-        Currency::BTC => Some("BTC".to_string()),
-        Currency::EUR => Some("EUR".to_string()),
-        Currency::LTC => Some("LTC".to_string()),
-        Currency::GBP => Some("GBP".to_string()),
-        Currency::USD => Some("USD".to_string()),
-        Currency::ETH => Some("ETH".to_string()),
-        Currency::BCH => Some("BCH".to_string()),
-        _ => None,
-    }
+    serde_json::to_string(&currency).ok()
 }

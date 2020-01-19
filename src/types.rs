@@ -11,11 +11,16 @@ pub type Volume = BigDecimal;
 
 pub trait BigDecimalConv {
     fn as_f64(&self) -> Result<f64>;
+    fn as_f32(&self) -> Result<f32>;
 }
 
 impl BigDecimalConv for BigDecimal {
     fn as_f64(&self) -> Result<f64> {
         self.to_f64().ok_or(ErrorKind::BigDecimalTooLarge(self.clone()).into())
+    }
+
+    fn as_f32(&self) -> Result<f32> {
+        self.to_f32().ok_or(ErrorKind::BigDecimalTooLarge(self.clone()).into())
     }
 }
 
@@ -211,7 +216,7 @@ pub struct LiveEventEnveloppe(pub Exchange, pub LiveEvent);
 /// Update date : 27/10/2017.
 /// Note : 1ST, 2GIVE, 8BIT have been renammed "_1ST", "_2GIVE" and "_8BIT" since variables name
 /// cannot start with a number.
-#[derive(Debug, Copy, Clone, Hash, Eq, PartialEq)]
+#[derive(Debug, Copy, Clone, Hash, Eq, PartialEq, Deserialize, Serialize)]
 #[allow(non_camel_case_types)]
 pub enum Currency {
     _1ST,

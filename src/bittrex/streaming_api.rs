@@ -40,14 +40,14 @@ const BITTREX_HUB: &'static str = "c2";
 
 impl BittrexStreamingApi {
     /// Create a new bittrex exchange bot, unavailable channels and currencies are ignored
-    pub async fn new_bot<C: Credentials>(creds: C, channels: HashMap<Channel, Vec<Pair>>, recipients: Vec<Recipient<LiveEventEnveloppe>>) -> Result<BittrexBot> {
+    pub async fn new_bot<C: Credentials>(creds: Box<C>, channels: HashMap<Channel, HashSet<Pair>>, recipients: Vec<Recipient<LiveEventEnveloppe>>) -> Result<BittrexBot> {
         // Live order book pairs
-        let order_book_pairs: HashSet<Pair> = channels.get(&Channel::LiveFullOrderBook).unwrap_or(&vec![])
-            .iter().filter(|currency_pair| super::utils::get_pair_string(&currency_pair).is_some()).map(|&p| p).collect();
+        let mut map = channels.clone();
+        let order_book_pairs: &HashSet<Pair> = map.entry(Channel::LiveFullOrderBook).or_default();
         // Live trade pairs
-        let trade_pairs : HashSet<Pair> = channels.get(&Channel::LiveTrades).unwrap_or(&vec![])
-            .iter().filter(|currency_pair| super::utils::get_pair_string(&currency_pair).is_some()).map(|&p| p).collect();
-        debug!("{:?}, {:?}", order_book_pairs, trade_pairs);
+        let mut map = channels.clone();
+        let trade_pairs : &HashSet<Pair> = map.entry(Channel::LiveTrades).or_default();
+
         let api = Box::new(BittrexStreamingApi {
             api_key: creds.get("api_key").unwrap_or_default(),
             api_secret: creds.get("api_secret").unwrap_or_default(),
@@ -60,7 +60,7 @@ impl BittrexStreamingApi {
         let rc = api.books.clone();
 
         let mut books = rc.borrow_mut();
-        for &pair in &order_book_pairs {
+        for &pair in order_book_pairs {
             books.insert(pair, LiveAggregatedOrderBook::default(pair));
         }
 
@@ -69,7 +69,7 @@ impl BittrexStreamingApi {
         match client {
             Ok(addr) => {
                 if !order_book_pairs.is_empty() {
-                    for &pair in &order_book_pairs {
+                    for &pair in order_book_pairs {
                         let currency = *super::utils::get_pair_string(&pair).unwrap();
                         addr.do_send(HubQuery::new(BITTREX_HUB.to_string(), "QueryExchangeState".to_string(), vec![currency.to_string()], "QE2".to_string()));
                     }
@@ -152,7 +152,7 @@ impl HubClientHandler for BittrexStreamingApi {
                     };
                     let latest_order_book: Orderbook = agg.order_book();
                     if latest_order_book.asks == agg.last_asks && latest_order_book.bids == agg.last_bids {
-                        debug!("Order book top unchanged, not flushing");
+                        trace!("Order book top unchanged, not flushing");
                     } else {
                         agg.last_asks = latest_order_book.asks.clone();
                         agg.last_bids = latest_order_book.bids.clone();
@@ -203,7 +203,7 @@ impl HubClientHandler for BittrexStreamingApi {
                 Ok(vec![LiveEvent::LiveOrderbook(latest_order_book.clone())])
             }
             _ => {
-                debug!("Unknown message : method {:?} message {:?}", method, message);
+                trace!("Unknown message : method {:?} message {:?}", method, message);
                 Err(())
             }
         };

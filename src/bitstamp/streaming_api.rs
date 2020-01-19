@@ -30,11 +30,11 @@ pub struct BitstampStreamingApi {
     api_secret: String,
     customer_id: String,
     pub recipients: Vec<Recipient<LiveEventEnveloppe>>,
-    channels: HashMap<Channel, Vec<Pair>>,
+    channels: HashMap<Channel, HashSet<Pair>>,
 }
 
 impl BitstampStreamingApi {
-    pub async fn new_bot<C: Credentials>(creds: C, channels: HashMap<Channel, Vec<Pair>>, recipients: Vec<Recipient<LiveEventEnveloppe>>) -> Result<BitstampBot> {
+    pub async fn new_bot<C: Credentials>(creds: Box<C>, channels: HashMap<Channel, HashSet<Pair>>, recipients: Vec<Recipient<LiveEventEnveloppe>>) -> Result<BitstampBot> {
         let api = BitstampStreamingApi {
             api_key: creds.get("api_key").unwrap_or_default(),
             api_secret: creds.get("api_secret").unwrap_or_default(),

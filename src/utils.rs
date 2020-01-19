@@ -9,7 +9,7 @@ pub fn pair_fn(xchg: Exchange) -> fn(&Pair) -> Option<&&str> {
         Exchange::Gdax => crate::gdax::utils::get_pair_string,
         Exchange::Kraken => crate::kraken::utils::get_pair_string,
         Exchange::Poloniex => crate::poloniex::utils::get_pair_string,
-        Exchange::Binance => crate::poloniex::utils::get_pair_string,
+        Exchange::Binance => crate::binance::utils::get_pair_string,
     }
 }
 

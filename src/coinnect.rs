@@ -10,7 +10,7 @@ use crate::poloniex::{PoloniexApi, PoloniexCreds};
 use crate::bittrex::{BittrexApi, BittrexCreds};
 use crate::bittrex::streaming_api::BittrexStreamingApi;
 use crate::gdax::{GdaxApi, GdaxCreds};
-use crate::binance::{BinanceApi, BinanceCreds};
+use crate::binance::{BinanceApi, BinanceCreds, streaming_api::BinanceStreamingApi};
 use crate::error::{Result};
 use crate::exchange::{Exchange, ExchangeApi, ExchangeSettings};
 use crate::bitstamp::{BitstampApi, BitstampCreds};
@@ -18,7 +18,7 @@ use crate::bitstamp::streaming_api::BitstampStreamingApi;
 use crate::exchange_bot::{ExchangeBot};
 use actix::{Recipient};
 use crate::types::{Channel, Pair, LiveEventEnveloppe};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 pub trait Credentials {
     /// Get an element from the credentials.
@@ -45,17 +45,26 @@ impl Coinnect {
         }
     }
 
-    pub async fn new_stream<C: Credentials>(exchange: Exchange, creds: C, s: ExchangeSettings, r: Vec<Recipient<LiveEventEnveloppe>>) -> Result<Box<dyn ExchangeBot>> {
-        let mut channels : HashMap<Channel, Vec<Pair>> = HashMap::new();
+    pub async fn new_stream<C: Credentials>(exchange: Exchange, creds: Box<C>, s: ExchangeSettings, r: Vec<Recipient<LiveEventEnveloppe>>) -> Result<Box<dyn ExchangeBot>> {
+        let mut channels : HashMap<Channel, HashSet<Pair>> = HashMap::new();
+        let pair_fn = crate::utils::pair_fn(exchange);
         if let Some(fs) = s.orderbook {
-            channels.insert(Channel::LiveFullOrderBook, fs.symbols);
+            // Live order book pairs
+            let order_book_pairs: HashSet<Pair> = fs.symbols
+                .iter().filter(|&currency_pair| pair_fn(currency_pair).is_some()).map(|&p| p).collect();
+            channels.insert(Channel::LiveFullOrderBook, order_book_pairs);
         }
         if let Some(fs) = s.trades {
-            channels.insert(Channel::LiveTrades, fs.symbols);
+            // Live trade pairs
+            let trade_pairs : HashSet<Pair> = fs.symbols
+                .iter().filter(|&currency_pair| pair_fn(&currency_pair).is_some()).map(|&p| p).collect();
+            channels.insert(Channel::LiveTrades, trade_pairs);
         }
+        debug!("{:?}", channels);
         match exchange {
             Exchange::Bitstamp => Ok(Box::new(BitstampStreamingApi::new_bot(creds, channels, r).await?)),
             Exchange::Bittrex => Ok(Box::new(BittrexStreamingApi::new_bot(creds, channels, r).await?)),
+            Exchange::Binance => Ok(Box::new(BinanceStreamingApi::new_bot(creds, channels, r).await?)),
             _ => unimplemented!()
         }
     }
