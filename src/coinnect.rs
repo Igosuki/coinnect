@@ -51,7 +51,8 @@ impl Coinnect {
         if let Some(fs) = s.orderbook {
             // Live order book pairs
             let order_book_pairs: HashSet<Pair> = fs.symbols
-                .iter().filter(|&currency_pair| pair_fn(currency_pair).is_some()).map(|&p| p).collect();
+                .iter().filter(|&currency_pair|
+                pair_fn(currency_pair).is_some()).map(|&p| p).collect();
             channels.insert(Channel::LiveFullOrderBook, order_book_pairs);
         }
         if let Some(fs) = s.trades {

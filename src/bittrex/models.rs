@@ -137,7 +137,7 @@ pub(crate) struct Fill {
     #[serde(alias = "Q")]
     pub Quantity: f32,
     #[serde(alias = "T")]
-    pub TimeStamp: i64,
+    pub TimeStamp: u64,
 }
 
 #[allow(non_snake_case)]

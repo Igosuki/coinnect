@@ -23,7 +23,6 @@ error_chain!{
         Io(::std::io::Error);
         Binance(binance::errors::Error);
         ParseBigDecimal(bigdecimal::ParseBigDecimalError);
-
     }
 
     errors {
@@ -124,6 +123,11 @@ error_chain!{
         PermissionDenied {
             description("PermissionDenied")
                 display("The operation cannot be done with the provided credentials")
+        }
+
+        WsError(reason: String) {
+            description("WsError")
+                display("Unable to connect to websocket {}", reason)
         }
     }
 }

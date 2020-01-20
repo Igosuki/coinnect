@@ -162,7 +162,7 @@ impl HubClientHandler for BittrexStreamingApi {
                 if self.trade_pairs.contains(&current_pair) {
                     for fill in delta.Fills {
                         let lt = LiveTrade {
-                            event_ms: fill.TimeStamp,
+                            event_ms: fill.TimeStamp as i64,
                             pair: format!("{:?}", current_pair),
                             amount: fill.Quantity,
                             price: BigDecimal::from(fill.Rate),

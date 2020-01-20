@@ -1,15 +1,26 @@
-use actix::{Addr, Recipient, Actor, Context, Running, Arbiter, Handler, Supervisor, AsyncContext, WrapFuture};
-use crate::exchange_bot::ExchangeBot;
-use crate::types::{Channel, Pair, LiveEventEnveloppe, LiveAggregatedOrderBook};
+use futures::stream::{SplitSink};
+use actix::{Addr, Recipient, Actor, Context, Running, Arbiter, Handler, Supervisor, AsyncContext, WrapFuture, ActorFuture, ContextFutureSpawner};
+use crate::exchange_bot::{ExchangeBot, WsHandler, DefaultWsActor};
+use crate::types::{Channel, Pair, LiveEventEnveloppe, LiveAggregatedOrderBook, LiveEvent};
 use std::collections::{HashSet, HashMap};
 use crate::coinnect::Credentials;
-use binance::websockets::{WebSockets, WebsocketEvent};
 use std::rc::Rc;
 use std::cell::RefCell;
 use crate::error::*;
+use std::time::Duration;
+use actix::io::SinkWrite;
+use awc::ws::{Message, Codec};
+use actix_codec::Framed;
+use awc::BoxedSocket;
+use bytes::Bytes;
+use bytes::Buf;
+use crate::exchange::Exchange;
+use super::models::*;
+
+static WEBSOCKET_URL: &'static str = "wss://stream.binance.com:9443/ws";
 
 pub struct BinanceBot {
-    addr: Addr<BinanceStreamingApi>
+    addr: Addr<DefaultWsActor>
 }
 
 impl ExchangeBot for BinanceBot {
@@ -19,100 +30,67 @@ impl ExchangeBot for BinanceBot {
 }
 
 pub struct BinanceStreamingApi {
-    web_socket: WebSockets<'static>,
     books: Rc<RefCell<HashMap<Pair, LiveAggregatedOrderBook>>>,
-}
-
-#[derive(Message)]
-#[rtype(result = "()")]
-struct ConnQuery {
-    channel: String,
-    pair: String,
+    pub channels: HashMap<Channel, HashSet<Pair>>,
+    pub recipients: Vec<Recipient<LiveEventEnveloppe>>,
 }
 
 impl BinanceStreamingApi {
     /// Create a new bittrex exchange bot, unavailable channels and currencies are ignored
     pub async fn new_bot<C: Credentials>(creds: Box<C>, channels: HashMap<Channel, HashSet<Pair>>, recipients: Vec<Recipient<LiveEventEnveloppe>>) -> Result<BinanceBot> {
-        let client: WebSockets = WebSockets::new(BinanceStreamingApi::handler);
+
+        let mut map = channels.clone();
+        let order_book_pairs: &HashSet<Pair> = map.entry(Channel::LiveFullOrderBook).or_default();
+        let trade_pairs: &HashSet<Pair> = map.entry(Channel::LiveTrades).or_default();
+
         let api = BinanceStreamingApi {
-            web_socket: client,
+            recipients,
             books: Rc::new(RefCell::new(HashMap::new())),
+            channels,
         };
 
-        let rc = api.books.clone();
-
-        let mut books = rc.borrow_mut();
-        let order_book_pairs = channels.get(&Channel::LiveFullOrderBook);
-        order_book_pairs.map(|pairs| {
-            for pair in pairs {
-                books.insert(pair.clone(), LiveAggregatedOrderBook::default(pair.clone()));
-            }
-        });
-
-        let addr = Supervisor::start(move |ctx| {
-            api
-        });
-
-        order_book_pairs.map(|pairs| {
-            for pair in pairs {
-                let currency = *super::utils::get_pair_string(pair).unwrap();
-                addr.do_send(ConnQuery { pair: currency.to_string(), channel: "aggTrade".to_string() });
-            }
-        });
+        let addr = DefaultWsActor::new(WEBSOCKET_URL, Box::new(api)).await?;
 
         return Ok(BinanceBot { addr });
     }
-
-    pub fn handler(event: WebsocketEvent) -> binance::errors::Result<()> {
-        match event {
-            WebsocketEvent::Trade(trade) => {
-                println!(
-                    "Symbol: {}, price: {}, qty: {}",
-                    trade.symbol, trade.price, trade.qty
-                );
-            },
-            WebsocketEvent::DepthOrderBook(depth_order_book) => {
-                println!(
-                    "Symbol: {}, Bids: {:?}, Ask: {:?}",
-                    depth_order_book.symbol, depth_order_book.bids, depth_order_book.asks
-                );
-            },
-            WebsocketEvent::OrderBook(order_book) => {
-                println!(
-                    "last_update_id: {}, Bids: {:?}, Ask: {:?}",
-                    order_book.last_update_id, order_book.bids, order_book.asks
-                );
-            },
-            _ => (),
-        };
-
-        Ok(())
-    }
 }
 
-impl actix::Supervised for BinanceStreamingApi {
-    fn restarting(&mut self, ctx: &mut <Self as Actor>::Context) {
+impl WsHandler for BinanceStreamingApi {
+    fn handle_in(&mut self, w: &mut SinkWrite<Message, SplitSink<Framed<BoxedSocket, Codec>, Message>>, msg: Bytes) {
+        let v : Result<Event> = serde_json::from_slice(msg.bytes()).map_err(|e| ErrorKind::Json(e).into());
+        if v.is_err() {
+            return trace!("Binance : error {:?} deserializing {:?}", v.err().unwrap(), msg);
+        }
+
+        let vec = self.recipients.clone();
+        if vec.len() == 0 as usize {
+            println!("{:?}", v);
+        } else {
+            let le : LiveEvent = v.unwrap().into();
+            for r in &vec {
+                let le : LiveEvent = le.clone();
+                r.do_send(LiveEventEnveloppe(Exchange::Binance, le));
+            }
+        }
     }
-}
 
-impl Actor for BinanceStreamingApi {
-    type Context = Context<Self>;
+    fn handle_started(&mut self, w: &mut SinkWrite<Message, SplitSink<Framed<BoxedSocket, Codec>, Message>>) {
+        let rc = self.books.clone();
 
-    fn started(&mut self, ctx: &mut Context<Self>) {
-    }
+        let mut books = rc.borrow_mut();
 
-    fn stopped(&mut self, _: &mut Context<Self>) {
-        println!("Disconnected");
-    }
-}
+        for pair in self.channels.get(&Channel::LiveFullOrderBook).unwrap() {
+            books.insert(pair.clone(), LiveAggregatedOrderBook::default(pair.clone()));
+        }
+        let mut i = 1;
+        for (k, v) in &self.channels {
+            for pair in v {
+                let result = serde_json::to_string(&subscription(k.clone(), *super::utils::get_pair_string(&pair).unwrap(), i)).unwrap();
+                debug!("Binance : connecting to {:?} for {:?} with {:?}", k, v, result);
+                w.write(Message::Text(result));
+                i += 1;
+            }
 
-impl Handler<ConnQuery> for BinanceStreamingApi {
-    type Result = ();
-
-    fn handle(&mut self, msg: ConnQuery, ctx: &mut Self::Context) -> Self::Result {
-        match self.web_socket.connect(&format!("{}@{}", msg.pair, msg.channel)) {
-            Ok(_) => (),
-            Err(e) => debug!("Error connecting {}", e)
         }
     }
 }

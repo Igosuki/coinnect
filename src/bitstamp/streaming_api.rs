@@ -42,7 +42,7 @@ impl BitstampStreamingApi {
             recipients,
             channels,
         };
-        let addr = DefaultWsActor::new("wss://ws.bitstamp.net", Box::new(api)).await;
+        let addr = DefaultWsActor::new("wss://ws.bitstamp.net", Box::new(api)).await?;
         Ok(BitstampBot { addr })
     }
 }

@@ -553,6 +553,7 @@ pub enum Pair {
     _1ST_BTC,
     _1ST_ETH,
     _2GIVE_BTC,
+    NONE,
     ABY_BTC,
     ADA_BTC,
     ADT_BTC,

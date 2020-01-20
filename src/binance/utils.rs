@@ -17,6 +17,7 @@ const PAIRS_BYTES : &[u8] = include_bytes!("./PAIRS");
 
 lazy_static! {
     //curl https://api.binance.com//api/v3/exchangeInfo | jq -r '.symbols | .[].baseAsset + "_" + .[].quoteAsset + "," '
+    //Big warning, binance uses lower case for websockets, and upper case symbols for the rest api
     static ref ALL_BINANCE_PAIRS : Vec<(&'static str, String)> = std::str::from_utf8(PAIRS_BYTES).unwrap().lines().map(|s| {
         (s, s.to_string().replace("_", ""))
     }).collect();
@@ -26,7 +27,7 @@ lazy_static! {
     static ref PAIRS_STRING: BidirMap<Pair, &'static str> = {
         let mut m = BidirMap::new();
         for (pair, b_pair) in &*ALL_BINANCE_PAIRS {
-            serde_json::from_str(pair).map(|p_enum| {
+            serde_json::from_str(format!("\"{}\"", pair).as_str()).map(|p_enum : Pair | {
                 m.insert(p_enum, b_pair.as_str());
             });
         }

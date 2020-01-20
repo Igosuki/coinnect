@@ -12,6 +12,7 @@ use chrono::prelude::*;
 use crate::error::*;
 use actix_codec::Framed;
 use awc::{ws::{Codec}, Client, BoxedSocket};
+use std::time::Duration;
 
 // Helper functions
 
@@ -67,26 +68,27 @@ pub fn from_json_bigdecimal(json_obj: &Value, key: &str) -> Result<BigDecimal> {
     Ok(BigDecimal::from_str(num).chain_err(|| ErrorKind::InvalidFieldFormat(key.to_string()))?)
 }
 
-pub async fn new_ws_client(url: &str) -> Framed<BoxedSocket, Codec> {
+pub async fn new_ws_client(url: String) -> Result<Framed<BoxedSocket, Codec>> {
     let ssl = {
         let mut ssl = openssl::ssl::SslConnector::builder(openssl::ssl::SslMethod::tls()).unwrap();
         let _ = ssl.set_alpn_protos(b"\x08http/1.1");
         ssl.build()
     };
-    let connector = awc::Connector::new().ssl(ssl).finish();
+    let connector = awc::Connector::new().ssl(ssl).timeout(Duration::from_secs(1)).finish();
     let client = Client::build()
         .connector(connector)
         .finish();
 
     let (response, framed) = client
-        .ws(url)
+        .ws(url.as_str())
         .connect()
         .await
         .map_err(|e| {
             println!("Error: {}", e);
-        })
-        .unwrap();
+            let e: Error = ErrorKind::WsError(format!("{}", e)).into();
+            e
+        })?;
 
     println!("{:?}", response);
-    framed
+    Ok(framed)
 }
