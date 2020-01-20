@@ -87,7 +87,7 @@ impl BinanceStreamingApi {
 
             let ret: FuturesUnordered<_> = orderbooks_futs.iter_mut().map(|rx| rx.recv()).collect();
             let ret2 : Vec<Option<Result<Orderbook>>> = ret.collect().await;
-            ret2.into_iter().filter(|&ref o| o.as_ref().and_then(|r| r.as_ref().ok()).is_some()).map(|ob| {
+            for ob in ret2.into_iter().filter(|&ref o| o.as_ref().and_then(|r| r.as_ref().ok()).is_some()) {
                 let ob = ob.unwrap().unwrap();
                 let mut books = self.books.borrow_mut();
                 let default_book = LiveAggregatedOrderBook::default(ob.pair);
@@ -96,7 +96,7 @@ impl BinanceStreamingApi {
                 agg.reset_bids(ob.bids.into_iter());
                 let latest_order_book: Orderbook = agg.order_book();
                 self.broadcast(LiveEvent::LiveOrderbook(latest_order_book.clone()));
-            });
+            }
     }
 
     fn broadcast(&self, v: LiveEvent) {
