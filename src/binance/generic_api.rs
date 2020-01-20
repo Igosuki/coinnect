@@ -21,7 +21,7 @@ impl ExchangeApi for BinanceApi {
         let market = self.market();
 
         let pair_str = pair_or(Exchange::Binance, &pair)?;
-        let result = market.get_24h_price_stats(*pair_str)?;
+        let result =   market.get_24h_price_stats(*pair_str).await?;
         Ok(Ticker {
             timestamp: helpers::get_unix_timestamp_ms(),
             pair,
@@ -36,7 +36,7 @@ impl ExchangeApi for BinanceApi {
         let market = self.market();
         let pair_str = pair_or(Exchange::Binance, &pair)?;
 
-        let book_ticker = market.get_depth(*pair_str)?;
+        let book_ticker = market.get_depth(*pair_str).await?;
 
         Ok(Orderbook {
             timestamp: helpers::get_unix_timestamp_ms(),
@@ -60,16 +60,16 @@ impl ExchangeApi for BinanceApi {
                 if price.is_none() {
                     return Err(ErrorKind::MissingPrice.into());
                 }
-                account.limit_buy(pair_str, quantity_f64, price.unwrap().as_f64()?)
+                account.limit_buy(pair_str, quantity_f64, price.unwrap().as_f64()?).await
             }
-            OrderType::BuyMarket => account.market_buy(pair_str, quantity_f64),
+            OrderType::BuyMarket => account.market_buy(pair_str, quantity_f64).await,
             OrderType::SellLimit => {
                 if price.is_none() {
                     return Err(ErrorKind::MissingPrice.into());
                 }
-                account.limit_sell(pair_str, quantity_f64, price.unwrap().as_f64()?)
+                account.limit_sell(pair_str, quantity_f64, price.unwrap().as_f64()?).await
             }
-            OrderType::SellMarket => account.market_sell(pair_str, quantity_f64),
+            OrderType::SellMarket => account.market_sell(pair_str, quantity_f64).await,
         };
 
         Ok(OrderInfo {
@@ -80,7 +80,7 @@ impl ExchangeApi for BinanceApi {
 
     /// Return the balances for each currency on the account
     async fn balances(&mut self) -> Result<Balances> {
-        let result = self.account().get_account()?;
+        let result = self.account().get_account().await?;
 
         let mut balances = Balances::new();
 

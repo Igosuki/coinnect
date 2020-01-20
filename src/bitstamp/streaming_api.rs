@@ -5,7 +5,7 @@ use super::models::*;
 use bytes::Bytes;
 use bytes::Buf;
 use futures::stream::{SplitSink};
-use actix::{io::SinkWrite, Addr, Recipient};
+use actix::{io::SinkWrite, Addr, Recipient, Context, Actor};
 use awc::{
     ws::{Codec, Message},  BoxedSocket
 };
@@ -13,6 +13,8 @@ use actix_codec::{Framed};
 use crate::types::{LiveEvent, Channel, LiveEventEnveloppe, Pair};
 use crate::exchange::Exchange;
 use std::collections::{HashMap, HashSet};
+use std::time::Duration;
+use async_trait::async_trait;
 
 pub struct BitstampBot {
     addr: Addr<DefaultWsActor>
@@ -42,12 +44,14 @@ impl BitstampStreamingApi {
             recipients,
             channels,
         };
-        let addr = DefaultWsActor::new("wss://ws.bitstamp.net", Box::new(api)).await?;
+        let addr = DefaultWsActor::new("BitstampStream", "wss://ws.bitstamp.net", Some(Duration::from_secs(5)), Box::new(api)).await?;
         Ok(BitstampBot { addr })
     }
 }
 
+#[async_trait]
 impl WsHandler for BitstampStreamingApi {
+    #[cfg_attr(feature = "flame_it", flame)]
     fn handle_in(&mut self, w: &mut SinkWrite<Message, SplitSink<Framed<BoxedSocket, Codec>, Message>>, msg: Bytes) {
         let v : Event = serde_json::from_slice(msg.bytes()).unwrap();
         match v {
@@ -58,7 +62,7 @@ impl WsHandler for BitstampStreamingApi {
             o => {
                 let vec = self.recipients.clone();
                 if vec.len() == 0 as usize {
-                    println!("{:?}", o);
+                    debug!("{:?}", o);
                 } else {
                     let le : LiveEvent = o.into();
                     for r in &vec {
@@ -70,6 +74,7 @@ impl WsHandler for BitstampStreamingApi {
         };
     }
 
+    #[cfg_attr(feature = "flame_it", flame)]
     fn handle_started(&mut self, w: &mut SinkWrite<Message, SplitSink<Framed<BoxedSocket, Codec>, Message>>) {
         for (k, v) in self.channels.clone() {
             for pair in v {

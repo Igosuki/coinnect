@@ -65,7 +65,7 @@ impl BittrexStreamingApi {
         }
 
         // SignalR Client
-        let client = HubClient::new(BITTREX_HUB, "https://socket.bittrex.com/signalr/", 100, RestartPolicy::Always, api).await;
+        let client = HubClient::new(BITTREX_HUB, "https://socket.bittrex.com/signalr/", 20, RestartPolicy::Always, api).await;
         match client {
             Ok(addr) => {
                 if !order_book_pairs.is_empty() {
@@ -109,6 +109,7 @@ impl HubClientHandler for BittrexStreamingApi {
         if !self.trade_pairs.is_empty() || !self.order_book_pairs.is_empty() {
             let all_pairs : HashSet<Pair> = self.trade_pairs.union(&self.order_book_pairs).map(|&p| p).collect();
             let currencies : Vec<String> = all_pairs.iter().map(|p| (*super::utils::get_pair_string(p).unwrap()).to_string()).collect();
+            info!("Bittrex : connecting to ExchangeDeltas for {:?}", &currencies);
             for currency in currencies {
                 conn_queries.push(Box::new(HubQuery::new(BITTREX_HUB.to_string(), "SubscribeToExchangeDeltas".to_string(), vec![currency], "1".to_string())));
             }
@@ -132,32 +133,11 @@ impl HubClientHandler for BittrexStreamingApi {
                     let mut books = self.books.borrow_mut();
                     let default_book = LiveAggregatedOrderBook::default(current_pair);
                     let mut agg = books.entry(current_pair).or_insert(default_book);
-                    for op in delta.Sells {
-                        let kp = (BigDecimal::from(op.Rate), BigDecimal::from(op.Quantity));
-                        let asks = &mut agg.asks_by_price;
-                        if op.Quantity == 0.0 {
-                            asks.remove(&kp.0.clone());
-                        } else {
-                            asks.entry(kp.0.clone()).or_insert(kp);
-                        }
-                    };
-                    for op in delta.Buys {
-                        let kp = (BigDecimal::from(op.Rate), BigDecimal::from(op.Quantity));
-                        let bids = &mut agg.bids_by_price;
-                        if op.Quantity == 0.0 {
-                            bids.remove(&kp.0.clone());
-                        } else {
-                            bids.entry(kp.0.clone()).or_insert(kp);
-                        }
-                    };
-                    let latest_order_book: Orderbook = agg.order_book();
-                    if latest_order_book.asks == agg.last_asks && latest_order_book.bids == agg.last_bids {
-                        trace!("Order book top unchanged, not flushing");
-                    } else {
-                        agg.last_asks = latest_order_book.asks.clone();
-                        agg.last_bids = latest_order_book.bids.clone();
-                        events.push(LiveEvent::LiveOrderbook(latest_order_book));
-                    }
+                    let asks = delta.Sells.into_iter().map(|op| (BigDecimal::from(op.Rate), BigDecimal::from(op.Quantity)));
+                    agg.update_asks(asks);
+                    let buys = delta.Buys.into_iter().map(|op| (BigDecimal::from(op.Rate), BigDecimal::from(op.Quantity)));
+                    agg.update_bids(buys);
+                    agg.latest_order_book().map(|ob| events.push(LiveEvent::LiveOrderbook(ob)));
                 }
                 if self.trade_pairs.contains(&current_pair) {
                     for fill in delta.Fills {
@@ -191,14 +171,10 @@ impl HubClientHandler for BittrexStreamingApi {
                 let current_pair = *pair.unwrap();
                 let default_book = LiveAggregatedOrderBook::default(current_pair);
                 let mut agg = books.entry(current_pair).or_insert(default_book);
-                for op in state.Sells {
-                    let kp = (BigDecimal::from(op.R), BigDecimal::from(op.Q));
-                    agg.asks_by_price.entry(kp.0.clone()).or_insert(kp);
-                };
-                for op in state.Buys {
-                    let kp = (BigDecimal::from(op.R), BigDecimal::from(op.Q));
-                    agg.bids_by_price.entry(kp.0.clone()).or_insert(kp);
-                };
+                let asks = state.Sells.into_iter().map(|op| (BigDecimal::from(op.R), BigDecimal::from(op.Q)));
+                agg.reset_asks(asks);
+                let bids = state.Buys.into_iter().map(|op| (BigDecimal::from(op.R), BigDecimal::from(op.Q)));
+                agg.reset_bids(bids);
                 let latest_order_book: Orderbook = agg.order_book();
                 Ok(vec![LiveEvent::LiveOrderbook(latest_order_book.clone())])
             }

@@ -21,7 +21,7 @@
 //! the library malfunction, which can lead to a loss of money.
 
 // error_chain can make a lot of recursions.
-#![recursion_limit="128"]
+#![recursion_limit="256"]
 
 // Allow lint customization.
 #![allow(unknown_lints)]

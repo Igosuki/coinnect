@@ -1,7 +1,7 @@
 //! Types definition used for handling returned data when generic API is used.
 
 use std::collections::{HashMap, BTreeMap};
-use bigdecimal::{BigDecimal, ToPrimitive};
+use bigdecimal::{BigDecimal, ToPrimitive, Zero};
 use std::str::FromStr;
 use crate::error::{ErrorKind, Result};
 
@@ -25,6 +25,7 @@ impl BigDecimalConv for BigDecimal {
 }
 
 pub type Balances = HashMap<Currency, Amount>;
+
 use chrono::prelude::*;
 use crate::exchange::Exchange;
 use derive_more::Display;
@@ -77,8 +78,8 @@ impl Orderbook {
         }
         Some(
             (self.asks[0].0.clone() + self.bids[0].0.clone())
-            /
-            BigDecimal::from_str("2.0").unwrap()
+                /
+                BigDecimal::from_str("2.0").unwrap()
         )
     }
 }
@@ -93,7 +94,7 @@ pub struct LiveAggregatedOrderBook {
     pub last_bids: Vec<(Price, Volume)>,
 }
 
-const DEFAULT_BOOK_DEPTH : i8 = 5;
+const DEFAULT_BOOK_DEPTH: i8 = 5;
 
 impl LiveAggregatedOrderBook {
     pub fn default(pair: Pair) -> LiveAggregatedOrderBook {
@@ -108,13 +109,75 @@ impl LiveAggregatedOrderBook {
     }
 
     pub fn order_book(&self) -> Orderbook {
-        let asks : Vec<(Price, Volume)> = self.asks_by_price.iter().map(|(_, v)| v.clone()).take(self.depth as usize).rev().collect();
+        let asks: Vec<(Price, Volume)> = self.asks_by_price.iter().map(|(_, v)| v.clone()).take(self.depth as usize).rev().collect();
         let bids: Vec<(Price, Volume)> = self.bids_by_price.iter().rev().map(|(_, v)| v.clone()).take(self.depth as usize).rev().collect();
         Orderbook {
             timestamp: Utc::now().timestamp_millis(),
             pair: self.pair,
             asks,
             bids,
+        }
+    }
+
+    pub fn latest_order_book(&mut self) -> Option<Orderbook> {
+        let latest_order_book: Orderbook = self.order_book();
+        if latest_order_book.asks == self.last_asks && latest_order_book.bids == self.last_bids {
+            trace!("Order book top unchanged, not flushing");
+            return None;
+        } else {
+            self.last_asks = latest_order_book.asks.clone();
+            self.last_bids = latest_order_book.bids.clone();
+            Some(latest_order_book)
+        }
+    }
+
+    pub fn reset_asks<I>(&mut self, iter: I)
+        where
+            I: Iterator<Item=(BigDecimal, BigDecimal)> {
+        for kp in iter {
+            self.asks_by_price.entry(kp.0.clone()).or_insert(kp);
+        }
+    }
+
+    pub fn reset_bids<I>(&mut self, iter: I)
+        where
+            I: Iterator<Item=(BigDecimal, BigDecimal)> {
+        for kp in iter {
+            self.bids_by_price.entry(kp.0.clone()).or_insert(kp);
+        }
+    }
+
+    pub fn update_asks<I>(&mut self, iter: I)
+        where
+            I: Iterator<Item=(BigDecimal, BigDecimal)> {
+        for kp in iter {
+            self.update_ask(kp)
+        }
+    }
+
+    pub fn update_ask(&mut self, kp: (BigDecimal, BigDecimal)) {
+        let bids = &mut self.asks_by_price;
+        if kp.1.is_zero() {
+            bids.remove(&kp.0.clone());
+        } else {
+            bids.entry(kp.0.clone()).or_insert(kp);
+        }
+    }
+
+    pub fn update_bids<I>(&mut self, iter: I)
+        where
+            I: Iterator<Item=(BigDecimal, BigDecimal)> {
+        for kp in iter {
+            self.update_ask(kp)
+        }
+    }
+
+    pub fn update_bid(&mut self, kp: (BigDecimal, BigDecimal)) {
+        let bids = &mut self.bids_by_price;
+        if kp.1.is_zero() {
+            bids.remove(&kp.0.clone());
+        } else {
+            bids.entry(kp.0.clone()).or_insert(kp);
         }
     }
 }
@@ -140,7 +203,7 @@ pub enum OrderType {
 pub enum TradeType {
     Sell,
     Buy,
-    None
+    None,
 }
 
 impl From<String> for TradeType {
@@ -205,7 +268,7 @@ pub enum LiveEvent {
     LiveOrder(LiveOrder),
     LiveTrade(LiveTrade),
     LiveOrderbook(Orderbook),
-    Noop
+    Noop,
 }
 
 #[derive(Message, Clone, Debug)]

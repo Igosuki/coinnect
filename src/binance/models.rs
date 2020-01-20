@@ -71,7 +71,7 @@ pub struct Subscription {
     id: i32,
 }
 
-pub fn subscription(c: Channel, currency_pair: &str, id: i32) -> Subscription {
+pub fn subscription(c: Channel, currency_pairs: Vec<&str>, id: i32) -> Subscription {
     let channel_str = match c {
         Channel::LiveTrades => "trade",
         Channel::LiveOrders => "orders",
@@ -81,7 +81,7 @@ pub fn subscription(c: Channel, currency_pair: &str, id: i32) -> Subscription {
     };
     Subscription {
         method: String::from("SUBSCRIBE"),
-        params: vec![format!("{}@{}", currency_pair.to_lowercase(), channel_str)],
+        params: currency_pairs.into_iter().map(|cp| format!("{}@{}", cp.to_lowercase(), channel_str)).collect(),
         id,
     }
 }

@@ -84,11 +84,11 @@ pub async fn new_ws_client(url: String) -> Result<Framed<BoxedSocket, Codec>> {
         .connect()
         .await
         .map_err(|e| {
-            println!("Error: {}", e);
+            debug!("Error: {}", e);
             let e: Error = ErrorKind::WsError(format!("{}", e)).into();
             e
         })?;
 
-    println!("{:?}", response);
+    debug!("WS Client Response {:?}", response);
     Ok(framed)
 }

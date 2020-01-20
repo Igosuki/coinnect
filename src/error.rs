@@ -129,5 +129,15 @@ error_chain!{
             description("WsError")
                 display("Unable to connect to websocket {}", reason)
         }
+
+        BackoffConnectionTimeout(e: String) {
+            description("Connection timeout despite retries and backoff")
+                display("Unable to connect, last error : {}", e)
+        }
+
+        ChannelCanceled(e: String) {
+            description("Channel was dropped before sender")
+                display("Unable to send into channel : {}", e)
+        }
     }
 }

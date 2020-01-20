@@ -30,7 +30,7 @@ use binance::api::Binance;
 use binance::market::Market;
 use binance::account::Account;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct BinanceApi {
     last_request: i64, // unix timestamp in ms, to avoid ban
     pub api_key: Option<String>,

@@ -282,6 +282,12 @@ lazy_static! {
         m.insert(XMR_USDT, "USDT-XMR");
         m.insert(XRP_USDT, "USDT-XRP");
         m.insert(ZEC_USDT, "USDT-ZEC");
+        m.insert(BSV_BTC, "BTC-BSV");
+        m.insert(XTP_BTC, "BTC-XTP");
+        m.insert(USDT_USD, "USD-USDT");
+        m.insert(BCH_BTC, "BTC-BCH");
+        m.insert(BSV_USD, "USD-BSV");
+        m.insert(TUSD_BTC, "BTC-TUSD");
         m
     };
 }
